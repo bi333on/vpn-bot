@@ -19,7 +19,7 @@ from app.keyboards.inline import (
     subscription_actions,
 )
 from app.services.balance import spend_balance
-from app.services.design import get_design
+from app.services.design import answer_photo_caption, get_design
 from app.services.messaging import send_subscription_config
 from app.services.qr import make_qr_png
 from app.services.subscription import (
@@ -67,10 +67,13 @@ async def cb_subs(cb: CallbackQuery) -> None:
         )
         if not subs:
             if image:
-                await cb.message.answer_photo(image)
-            await cb.message.edit_text(
-                tr(lang, "subs_empty"), reply_markup=back_to_menu(lang)
-            )
+                await answer_photo_caption(
+                    cb.message, image, tr(lang, "subs_empty"), back_to_menu(lang)
+                )
+            else:
+                await cb.message.edit_text(
+                    tr(lang, "subs_empty"), reply_markup=back_to_menu(lang)
+                )
             await cb.answer()
             return
         kb = InlineKeyboardBuilder()
@@ -84,12 +87,10 @@ async def cb_subs(cb: CallbackQuery) -> None:
         text = tr(lang, "subs_title") + "\n\n" + "\n\n".join(
             _sub_detail(s, lang) for s in subs
         )
-        if image:
-            await cb.message.answer_photo(image)
-            await cb.message.answer(
-                text, parse_mode="HTML", reply_markup=kb.as_markup()
-            )
-        else:
+        if not (
+            image
+            and await answer_photo_caption(cb.message, image, text, kb.as_markup())
+        ):
             await cb.message.edit_text(
                 text, parse_mode="HTML", reply_markup=kb.as_markup()
             )

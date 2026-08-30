@@ -13,7 +13,7 @@ from app.handlers.common import get_or_create_user
 from app.i18n import get_lang, tr
 from app.keyboards.inline import back_to_menu, cabinet_keyboard
 from app.services import referral as referral_service
-from app.services.design import get_design
+from app.services.design import answer_photo_caption, get_design, send_screen
 from app.utils import fmt_money
 
 router = Router()
@@ -76,9 +76,7 @@ async def cmd_start(message: Message) -> None:
         text, lang, design = await _render_cabinet(session, user)
         kb = _cabinet_kb(lang, message.from_user.id, design)
         image = _image(design, "cabinet")
-        if image:
-            await message.answer_photo(image)
-        await message.answer(text, parse_mode="HTML", reply_markup=kb)
+        await send_screen(message, image, text, kb, placeholder=True)
 
 
 @router.callback_query(F.data == "menu")
@@ -93,11 +91,7 @@ async def cb_menu(cb: CallbackQuery) -> None:
         text, lang, design = await _render_cabinet(session, user)
         kb = _cabinet_kb(lang, cb.from_user.id, design)
         image = _image(design, "cabinet")
-        if image:
-            await cb.message.answer_photo(image)
-            await cb.message.answer(text, parse_mode="HTML", reply_markup=kb)
-        else:
-            await cb.message.edit_text(text, parse_mode="HTML", reply_markup=kb)
+        await send_screen(cb.message, image, text, kb, placeholder=True)
     await cb.answer()
 
 
@@ -131,11 +125,7 @@ async def cb_lang(cb: CallbackQuery) -> None:
         text, _, design = await _render_cabinet(session, user)
         kb = _cabinet_kb(lang, cb.from_user.id, design)
         image = _image(design, "cabinet")
-        if image:
-            await cb.message.answer_photo(image)
-            await cb.message.answer(text, parse_mode="HTML", reply_markup=kb)
-        else:
-            await cb.message.edit_text(text, parse_mode="HTML", reply_markup=kb)
+        await send_screen(cb.message, image, text, kb, placeholder=True)
         await cb.answer(tr(lang, "lang_switched", lang=lang))
 
 
@@ -158,10 +148,7 @@ async def cb_balance(cb: CallbackQuery) -> None:
         )
         kb = back_to_menu(lang)
         image = _image(design, "balance")
-        if image:
-            await cb.message.answer_photo(image)
-            await cb.message.answer(text, parse_mode="HTML", reply_markup=kb)
-        else:
+        if not (image and await answer_photo_caption(cb.message, image, text, kb)):
             await cb.message.edit_text(text, parse_mode="HTML", reply_markup=kb)
     await cb.answer()
 

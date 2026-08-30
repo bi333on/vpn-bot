@@ -4,6 +4,11 @@
 """
 from __future__ import annotations
 
+from functools import lru_cache
+from io import BytesIO
+
+from aiogram.types import BufferedInputFile
+
 from app.i18n import tr
 from app.services.settings import get_setting, set_setting
 
@@ -69,3 +74,68 @@ def slot_emoji(slot: str, design: dict) -> str:
         if s[0] == slot:
             return (design.get("emoji") or {}).get(slot) or s[1]
     return ""
+
+
+@lru_cache(maxsize=1)
+def placeholder_image_bytes() -> bytes:
+    """Сгенерировать PNG-баннер-заглушку для экранов (кэшируется)."""
+    from PIL import Image, ImageDraw, ImageFont
+
+    width, height = 1200, 400
+    img = Image.new("RGB", (width, height))
+    draw = ImageDraw.Draw(img)
+    top = (8, 14, 26)
+    bottom = (22, 46, 72)
+    for y in range(height):
+        t = y / max(height - 1, 1)
+        draw.line(
+            [(0, y), (width, y)],
+            fill=tuple(int(top[i] + (bottom[i] - top[i]) * t) for i in range(3)),
+        )
+
+    try:
+        font_big = ImageFont.load_default(size=110)
+        font_small = ImageFont.load_default(size=38)
+    except TypeError:
+        font_big = ImageFont.load_default()
+        font_small = ImageFont.load_default()
+
+    def _center(text, font, y, fill):
+        bbox = draw.textbbox((0, 0), text, font=font)
+        w = bbox[2] - bbox[0]
+        h = bbox[3] - bbox[1]
+        draw.text(((width - w) / 2, y), text, fill=fill, font=font)
+        return h
+
+    h1 = _center("VPN", font_big, 110, (255, 255, 255))
+    _center("SECURE · FAST · ANONYMOUS", font_small, 110 + h1 + 16, (150, 178, 205))
+
+    buf = BytesIO()
+    img.save(buf, format="PNG")
+    return buf.getvalue()
+
+
+async def answer_photo_caption(msg, image: str, text: str, kb) -> bool:
+    """Отправить фото с подписью одним сообщением. Вернуть True при успехе."""
+    try:
+        await msg.answer_photo(
+            photo=image, caption=text, parse_mode="HTML", reply_markup=kb
+        )
+        return True
+    except Exception:  # noqa: BLE001
+        return False
+
+
+async def send_screen(
+    msg, image: str, text: str, kb, placeholder: bool = False
+) -> None:
+    """Отправить экран одним сообщением: картинка сверху, текст — подпись."""
+    if image and await answer_photo_caption(msg, image, text, kb):
+        return
+    if placeholder:
+        photo = BufferedInputFile(placeholder_image_bytes(), filename="banner.png")
+        await msg.answer_photo(
+            photo=photo, caption=text, parse_mode="HTML", reply_markup=kb
+        )
+    else:
+        await msg.answer(text, parse_mode="HTML", reply_markup=kb)
