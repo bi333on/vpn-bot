@@ -17,6 +17,7 @@ from app.db.engine import dispose_engine, init_db, session_scope
 from app.db.models import Payment
 from app.handlers import register_handlers
 from app.scheduler.jobs import start_scheduler
+from app.services.git_update import notify_update_complete
 from app.services.messaging import send_subscription_config
 from app.services.payment_flow import finalize_payment
 from app.services.remnawave_config import load_remnawave_settings
@@ -90,6 +91,7 @@ async def run_polling() -> None:
     dp = build_dispatcher()
     await init_db()
     await load_remnawave_settings()
+    await notify_update_complete(bot)
     start_scheduler(bot)
     try:
         await dp.start_polling(bot, drop_pending_updates=True)
@@ -104,6 +106,7 @@ async def run_webhook() -> None:
     dp = build_dispatcher()
     await init_db()
     await load_remnawave_settings()
+    await notify_update_complete(bot)
 
     app = web.Application()
     app["bot"] = bot

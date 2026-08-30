@@ -19,6 +19,7 @@ from app.services.git_update import (
     check_updates,
     current_commit,
     git_pull,
+    mark_update_pending,
     restart,
 )
 from app.services.remnawave_config import (
@@ -629,6 +630,11 @@ async def cb_git_pull(cb: CallbackQuery) -> None:
         )
         await cb.answer()
         return
+    if "already up to date" in low:
+        await cb.message.edit_text("✅ Уже актуальная версия.")
+        await cb.answer()
+        return
+    mark_update_pending()
     await cb.message.edit_text("✅ Обновлено. Перезапускаю...")
     await cb.answer()
     restart()

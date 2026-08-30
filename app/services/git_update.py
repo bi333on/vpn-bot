@@ -54,3 +54,43 @@ async def git_pull() -> str:
 def restart() -> None:
     """Перезапустить процесс (Docker restart: unless-stopped поднимет заново)."""
     os._exit(0)
+
+
+def _marker_path() -> str:
+    return os.path.join(REPO_DIR, "data", ".update_pending")
+
+
+def mark_update_pending() -> None:
+    path = _marker_path()
+    os.makedirs(os.path.dirname(path), exist_ok=True)
+    with open(path, "w", encoding="utf-8") as f:
+        f.write("1")
+
+
+def has_update_marker() -> bool:
+    return os.path.exists(_marker_path())
+
+
+async def clear_update_marker() -> None:
+    path = _marker_path()
+    if os.path.exists(path):
+        os.remove(path)
+
+
+async def notify_update_complete(bot) -> None:
+    """При старте: сообщить админам, что обновление завершено."""
+    if not has_update_marker():
+        return
+    from app.config import settings
+
+    sha = await current_commit()
+    for admin_id in settings.admin_ids:
+        try:
+            await bot.send_message(
+                admin_id,
+                f"✅ Обновление завершено.\nТекущая версия: <code>{sha}</code>",
+                parse_mode="HTML",
+            )
+        except Exception:  # noqa: BLE001
+            continue
+    await clear_update_marker()
