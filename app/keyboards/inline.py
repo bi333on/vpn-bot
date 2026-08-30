@@ -54,6 +54,12 @@ def back_to_menu(lang: str = "ru") -> InlineKeyboardMarkup:
     return b.as_markup()
 
 
+def cancel_keyboard() -> InlineKeyboardMarkup:
+    b = InlineKeyboardBuilder()
+    b.button(text="❌ Отмена", callback_data="admin:cancel")
+    return b.as_markup()
+
+
 def plans_keyboard(plans: list[Plan], lang: str = "ru") -> InlineKeyboardMarkup:
     b = InlineKeyboardBuilder()
     for plan in plans:

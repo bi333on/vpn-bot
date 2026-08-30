@@ -13,7 +13,7 @@ from app.config import settings
 from app.context import get_remnawave
 from app.db.engine import session_scope
 from app.db.models import Payment, Plan, PromoCode, Subscription, User
-from app.keyboards.inline import admin_menu
+from app.keyboards.inline import admin_menu, cancel_keyboard
 from app.services.balance import add_balance
 from app.services.git_update import (
     check_updates,
@@ -76,6 +76,13 @@ async def cmd_admin(message: Message) -> None:
 async def cmd_cancel(message: Message, state: FSMContext) -> None:
     await state.clear()
     await message.answer("Действие отменено.", reply_markup=admin_menu())
+
+
+@router.callback_query(F.data == "admin:cancel", StateFilter("*"))
+async def cb_admin_cancel(cb: CallbackQuery, state: FSMContext) -> None:
+    await state.clear()
+    await cb.message.edit_text("Действие отменено.", reply_markup=admin_menu())
+    await cb.answer()
 
 
 # ---------- статистика ----------
@@ -177,7 +184,9 @@ async def cb_plans(cb: CallbackQuery) -> None:
 @router.callback_query(F.data == "admin:addplan")
 async def cb_addplan(cb: CallbackQuery, state: FSMContext) -> None:
     await state.set_state(AdminFlow.add_plan_name)
-    await cb.message.edit_text("Введите название тарифа:")
+    await cb.message.edit_text(
+        "Введите название тарифа:", reply_markup=cancel_keyboard()
+    )
     await cb.answer()
 
 
@@ -185,7 +194,9 @@ async def cb_addplan(cb: CallbackQuery, state: FSMContext) -> None:
 async def add_plan_name(message: Message, state: FSMContext) -> None:
     await state.update_data(plan_name=message.text.strip())
     await state.set_state(AdminFlow.add_plan_price)
-    await message.answer("Цена в рублях (например 149):")
+    await message.answer(
+        "Цена в рублях (например 149):", reply_markup=cancel_keyboard()
+    )
 
 
 @router.message(AdminFlow.add_plan_price)
@@ -193,11 +204,13 @@ async def add_plan_price(message: Message, state: FSMContext) -> None:
     try:
         rubles = int(message.text.strip())
     except ValueError:
-        await message.answer("Введите целое число рублей.")
+        await message.answer(
+            "Введите целое число рублей.", reply_markup=cancel_keyboard()
+        )
         return
     await state.update_data(plan_price=rubles * 100)
     await state.set_state(AdminFlow.add_plan_days)
-    await message.answer("Срок действия (дней):")
+    await message.answer("Срок действия (дней):", reply_markup=cancel_keyboard())
 
 
 @router.message(AdminFlow.add_plan_days)
@@ -205,11 +218,13 @@ async def add_plan_days(message: Message, state: FSMContext) -> None:
     try:
         days = int(message.text.strip())
     except ValueError:
-        await message.answer("Введите целое число дней.")
+        await message.answer(
+            "Введите целое число дней.", reply_markup=cancel_keyboard()
+        )
         return
     await state.update_data(plan_days=days)
     await state.set_state(AdminFlow.add_plan_gb)
-    await message.answer("Трафик (ГБ):")
+    await message.answer("Трафик (ГБ):", reply_markup=cancel_keyboard())
 
 
 @router.message(AdminFlow.add_plan_gb)
@@ -217,11 +232,15 @@ async def add_plan_gb(message: Message, state: FSMContext) -> None:
     try:
         gb = int(message.text.strip())
     except ValueError:
-        await message.answer("Введите целое число ГБ.")
+        await message.answer(
+            "Введите целое число ГБ.", reply_markup=cancel_keyboard()
+        )
         return
     await state.update_data(plan_gb=gb)
     await state.set_state(AdminFlow.add_plan_devices)
-    await message.answer("Лимит устройств (hwidDeviceLimit):")
+    await message.answer(
+        "Лимит устройств (hwidDeviceLimit):", reply_markup=cancel_keyboard()
+    )
 
 
 @router.message(AdminFlow.add_plan_devices)
@@ -229,7 +248,9 @@ async def add_plan_devices(message: Message, state: FSMContext) -> None:
     try:
         devices = int(message.text.strip())
     except ValueError:
-        await message.answer("Введите целое число.")
+        await message.answer(
+            "Введите целое число.", reply_markup=cancel_keyboard()
+        )
         return
     data = await state.get_data()
     async with session_scope() as session:
@@ -278,7 +299,9 @@ async def cb_promos(cb: CallbackQuery) -> None:
 @router.callback_query(F.data == "admin:addpromo")
 async def cb_addpromo(cb: CallbackQuery, state: FSMContext) -> None:
     await state.set_state(AdminFlow.add_promo_code)
-    await cb.message.edit_text("Код промокода (например SUMMER25):")
+    await cb.message.edit_text(
+        "Код промокода (например SUMMER25):", reply_markup=cancel_keyboard()
+    )
     await cb.answer()
 
 
@@ -287,19 +310,24 @@ async def add_promo_code(message: Message, state: FSMContext) -> None:
     code = (message.text or "").strip().upper()
     await state.update_data(promo_code=code)
     await state.set_state(AdminFlow.add_promo_type)
-    await message.answer("Тип скидки: введите `percent` или `fixed`:")
+    await message.answer(
+        "Тип скидки: введите `percent` или `fixed`:", reply_markup=cancel_keyboard()
+    )
 
 
 @router.message(AdminFlow.add_promo_type)
 async def add_promo_type(message: Message, state: FSMContext) -> None:
     value = (message.text or "").strip().lower()
     if value not in ("percent", "fixed"):
-        await message.answer("Введите `percent` или `fixed`.")
+        await message.answer(
+            "Введите `percent` или `fixed`.", reply_markup=cancel_keyboard()
+        )
         return
     await state.update_data(promo_type=value)
     await state.set_state(AdminFlow.add_promo_value)
     await message.answer(
-        "Значение: для percent — процент (1-100), для fixed — сумма в рублях:"
+        "Значение: для percent — процент (1-100), для fixed — сумма в рублях:",
+        reply_markup=cancel_keyboard(),
     )
 
 
@@ -308,14 +336,18 @@ async def add_promo_value(message: Message, state: FSMContext) -> None:
     try:
         value = int(message.text.strip())
     except ValueError:
-        await message.answer("Введите целое число.")
+        await message.answer(
+            "Введите целое число.", reply_markup=cancel_keyboard()
+        )
         return
     data = await state.get_data()
     if data["promo_type"] == "fixed":
         value = value * 100  # в копейки
     await state.update_data(promo_value=value)
     await state.set_state(AdminFlow.add_promo_max_uses)
-    await message.answer("Максимум использований (0 = без ограничения):")
+    await message.answer(
+        "Максимум использований (0 = без ограничения):", reply_markup=cancel_keyboard()
+    )
 
 
 @router.message(AdminFlow.add_promo_max_uses)
@@ -323,7 +355,9 @@ async def add_promo_max_uses(message: Message, state: FSMContext) -> None:
     try:
         max_uses = int(message.text.strip())
     except ValueError:
-        await message.answer("Введите целое число.")
+        await message.answer(
+            "Введите целое число.", reply_markup=cancel_keyboard()
+        )
         return
     data = await state.get_data()
     async with session_scope() as session:
@@ -343,7 +377,9 @@ async def add_promo_max_uses(message: Message, state: FSMContext) -> None:
 @router.callback_query(F.data == "admin:topup")
 async def cb_topup(cb: CallbackQuery, state: FSMContext) -> None:
     await state.set_state(AdminFlow.topup_user)
-    await cb.message.edit_text("Введите Telegram ID пользователя:")
+    await cb.message.edit_text(
+        "Введите Telegram ID пользователя:", reply_markup=cancel_keyboard()
+    )
     await cb.answer()
 
 
@@ -352,11 +388,13 @@ async def topup_user(message: Message, state: FSMContext) -> None:
     try:
         tg_id = int(message.text.strip())
     except ValueError:
-        await message.answer("Введите числовой Telegram ID.")
+        await message.answer(
+            "Введите числовой Telegram ID.", reply_markup=cancel_keyboard()
+        )
         return
     await state.update_data(topup_tg=tg_id)
     await state.set_state(AdminFlow.topup_amount)
-    await message.answer("Сумма пополнения в рублях:")
+    await message.answer("Сумма пополнения в рублях:", reply_markup=cancel_keyboard())
 
 
 @router.message(AdminFlow.topup_amount)
@@ -364,7 +402,9 @@ async def topup_amount(message: Message, state: FSMContext) -> None:
     try:
         rubles = int(message.text.strip())
     except ValueError:
-        await message.answer("Введите целое число рублей.")
+        await message.answer(
+            "Введите целое число рублей.", reply_markup=cancel_keyboard()
+        )
         return
     data = await state.get_data()
     async with session_scope() as session:
@@ -374,7 +414,9 @@ async def topup_amount(message: Message, state: FSMContext) -> None:
             )
         ).scalar_one_or_none()
         if user is None:
-            await message.answer("Пользователь не найден.")
+            await message.answer(
+                "Пользователь не найден.", reply_markup=admin_menu()
+            )
             await state.clear()
             return
         await add_balance(
@@ -391,7 +433,9 @@ async def topup_amount(message: Message, state: FSMContext) -> None:
 @router.callback_query(F.data == "admin:devices")
 async def cb_devices(cb: CallbackQuery, state: FSMContext) -> None:
     await state.set_state(AdminFlow.devices_user)
-    await cb.message.edit_text("Введите Telegram ID пользователя:")
+    await cb.message.edit_text(
+        "Введите Telegram ID пользователя:", reply_markup=cancel_keyboard()
+    )
     await cb.answer()
 
 
@@ -400,7 +444,9 @@ async def devices_user(message: Message, state: FSMContext) -> None:
     try:
         tg_id = int(message.text.strip())
     except ValueError:
-        await message.answer("Введите числовой Telegram ID.")
+        await message.answer(
+            "Введите числовой Telegram ID.", reply_markup=cancel_keyboard()
+        )
         return
     async with session_scope() as session:
         user = (
@@ -409,7 +455,9 @@ async def devices_user(message: Message, state: FSMContext) -> None:
             )
         ).scalar_one_or_none()
         if user is None:
-            await message.answer("Пользователь не найден.")
+            await message.answer(
+                "Пользователь не найден.", reply_markup=admin_menu()
+            )
             await state.clear()
             return
         subs = (
@@ -427,7 +475,9 @@ async def devices_user(message: Message, state: FSMContext) -> None:
             .all()
         )
         if not subs:
-            await message.answer("У пользователя нет активных подписок.")
+            await message.answer(
+                "У пользователя нет активных подписок.", reply_markup=admin_menu()
+            )
             await state.clear()
             return
         sub = subs[0]
@@ -435,7 +485,8 @@ async def devices_user(message: Message, state: FSMContext) -> None:
         await state.set_state(AdminFlow.devices_limit)
         await message.answer(
             f"Активная подписка #{sub.id}, текущий лимит: {sub.devices_limit}.\n"
-            "Введите новый лимит устройств:"
+            "Введите новый лимит устройств:",
+            reply_markup=cancel_keyboard(),
         )
 
 
@@ -444,10 +495,14 @@ async def devices_limit(message: Message, state: FSMContext) -> None:
     try:
         limit = int(message.text.strip())
     except ValueError:
-        await message.answer("Введите целое число.")
+        await message.answer(
+            "Введите целое число.", reply_markup=cancel_keyboard()
+        )
         return
     if limit < 1:
-        await message.answer("Лимит должен быть >= 1.")
+        await message.answer(
+            "Лимит должен быть >= 1.", reply_markup=cancel_keyboard()
+        )
         return
     data = await state.get_data()
     async with session_scope() as session:
@@ -455,7 +510,7 @@ async def devices_limit(message: Message, state: FSMContext) -> None:
         try:
             await set_device_limit(session, get_remnawave(), sub, limit)
         except Exception as exc:  # noqa: BLE001
-            await message.answer(f"Ошибка: {exc}")
+            await message.answer(f"Ошибка: {exc}", reply_markup=admin_menu())
             await state.clear()
             return
         await message.answer(
@@ -470,7 +525,9 @@ async def devices_limit(message: Message, state: FSMContext) -> None:
 @router.callback_query(F.data == "admin:broadcast")
 async def cb_broadcast(cb: CallbackQuery, state: FSMContext) -> None:
     await state.set_state(AdminFlow.broadcast_text)
-    await cb.message.edit_text("Введите текст рассылки:")
+    await cb.message.edit_text(
+        "Введите текст рассылки:", reply_markup=cancel_keyboard()
+    )
     await cb.answer()
 
 
@@ -504,7 +561,8 @@ async def cb_rwurl(cb: CallbackQuery, state: FSMContext) -> None:
     await state.set_state(AdminFlow.remnawave_url)
     await cb.message.edit_text(
         f"🔗 Текущий адрес Remnawave: {url or '—'}\n\n"
-        "Отправьте URL панели (https://panel.example.com) или /cancel:"
+        "Отправьте URL панели (https://panel.example.com):",
+        reply_markup=cancel_keyboard(),
     )
     await cb.answer()
 
@@ -513,7 +571,9 @@ async def cb_rwurl(cb: CallbackQuery, state: FSMContext) -> None:
 async def on_remnawave_url(message: Message, state: FSMContext) -> None:
     url = (message.text or "").strip()
     if not url:
-        await message.answer("Введите URL панели.")
+        await message.answer(
+            "Введите URL панели.", reply_markup=cancel_keyboard()
+        )
         return
     async with session_scope() as session:
         await set_remnawave_api_url(session, url)
@@ -533,7 +593,8 @@ async def cb_rwkey(cb: CallbackQuery, state: FSMContext) -> None:
     await state.set_state(AdminFlow.remnawave_token)
     await cb.message.edit_text(
         f"🔑 Текущий API-токен Remnawave: {masked}\n\n"
-        "Отправьте новый токен (или /cancel):"
+        "Отправьте новый токен:",
+        reply_markup=cancel_keyboard(),
     )
     await cb.answer()
 
@@ -542,7 +603,7 @@ async def cb_rwkey(cb: CallbackQuery, state: FSMContext) -> None:
 async def on_remnawave_token(message: Message, state: FSMContext) -> None:
     token = (message.text or "").strip()
     if not token:
-        await message.answer("Введите токен.")
+        await message.answer("Введите токен.", reply_markup=cancel_keyboard())
         return
     async with session_scope() as session:
         await set_remnawave_api_token(session, token)
@@ -562,7 +623,8 @@ async def cb_rwnode(cb: CallbackQuery, state: FSMContext) -> None:
     await cb.message.edit_text(
         f"🖧 Текущая нода Remnawave: {node_uuid or '—'}\n\n"
         "Отправьте UUID ноды (XRay-node), на которой выдавать пользователей "
-        "(пустая строка — все ноды; /cancel — отмена):"
+        "(пустая строка — все ноды):",
+        reply_markup=cancel_keyboard(),
     )
     await cb.answer()
 
