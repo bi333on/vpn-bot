@@ -622,18 +622,39 @@ async def cb_git(cb: CallbackQuery) -> None:
 
 @router.callback_query(F.data == "admin:git_pull")
 async def cb_git_pull(cb: CallbackQuery) -> None:
+    back_kb = InlineKeyboardBuilder()
+    back_kb.button(text="🔙 Назад", callback_data="admin:back")
+
     out = await git_pull()
     low = out.lower()
-    if any(word in low for word in ("fatal", "error", "denied", "could not", "not a git")):
+
+    if not out.strip():
         await cb.message.edit_text(
-            f"❌ Ошибка обновления:\n<code>{out[:400]}</code>", parse_mode="HTML"
+            "❌ git недоступен в контейнере.\n\n"
+            "Обновите вручную на сервере:\n"
+            "<code>cd /opt/vpn-bot && git pull && docker compose up -d --build</code>",
+            parse_mode="HTML",
+            reply_markup=back_kb.as_markup(),
         )
         await cb.answer()
         return
-    if "already up to date" in low:
-        await cb.message.edit_text("✅ Уже актуальная версия.")
+
+    if any(word in low for word in ("fatal", "error", "denied", "could not", "not a git")):
+        await cb.message.edit_text(
+            f"❌ Ошибка обновления:\n<code>{out[:400]}</code>",
+            parse_mode="HTML",
+            reply_markup=back_kb.as_markup(),
+        )
         await cb.answer()
         return
+
+    if "already up to date" in low:
+        await cb.message.edit_text(
+            "✅ Уже актуальная версия.", reply_markup=back_kb.as_markup()
+        )
+        await cb.answer()
+        return
+
     mark_update_pending()
     await cb.message.edit_text("✅ Обновлено. Перезапускаю...")
     await cb.answer()
