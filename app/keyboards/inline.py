@@ -148,5 +148,6 @@ def admin_menu() -> InlineKeyboardMarkup:
     b.button(text="📣 Рассылка", callback_data="admin:broadcast")
     b.button(text="🎨 Дизайн", callback_data="admin:design")
     b.button(text="🔄 Git-обновление", callback_data="admin:git")
+    b.button(text="🔙 Назад", callback_data="menu")
     b.adjust(2)
     return b.as_markup()
