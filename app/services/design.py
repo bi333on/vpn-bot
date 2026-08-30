@@ -139,3 +139,34 @@ async def send_screen(
         )
     else:
         await msg.answer(text, parse_mode="HTML", reply_markup=kb)
+
+
+def patch_edit_text() -> None:
+    """Сделать Message.edit_text совместимым с медиа-сообщениями.
+
+    Кабинет отправляется как фото с подписью (caption). На таком сообщении
+    Telegram отклоняет editMessageText — нужно editMessageCaption. Этот патч
+    прозрачно маршрутизирует edit_text на edit_caption для фото/видео/документов.
+    """
+    from aiogram.types import Message
+
+    original = Message.edit_text
+
+    async def edit_text(self, text, **kwargs):
+        is_media = bool(
+            getattr(self, "photo", None)
+            or getattr(self, "video", None)
+            or getattr(self, "document", None)
+            or getattr(self, "animation", None)
+        )
+        if is_media:
+            caption_kwargs = {}
+            for key in ("inline_message_id", "parse_mode", "reply_markup"):
+                if key in kwargs:
+                    caption_kwargs[key] = kwargs.pop(key)
+            if "entities" in kwargs:
+                caption_kwargs["caption_entities"] = kwargs.pop("entities")
+            return await self.edit_caption(caption=text, **caption_kwargs)
+        return await original(self, text, **kwargs)
+
+    Message.edit_text = edit_text

@@ -20,6 +20,7 @@ from app.scheduler.jobs import start_scheduler
 from app.services.git_update import notify_update_complete
 from app.services.messaging import send_subscription_config
 from app.services.payment_flow import finalize_payment
+from app.services.design import patch_edit_text
 from app.services.emoji import load_emoji_map
 from app.services.remnawave_config import load_remnawave_settings
 
@@ -34,6 +35,7 @@ def build_bot() -> Bot:
 def build_dispatcher() -> Dispatcher:
     dp = Dispatcher(storage=MemoryStorage())
     register_handlers(dp)
+    patch_edit_text()
     return dp
 
 
