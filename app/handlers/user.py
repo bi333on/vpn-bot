@@ -1,19 +1,54 @@
-"""Обработчики: /start, меню, рефералка, баланс, язык."""
+"""Обработчики: личный кабинет, рефералка, баланс, язык."""
 from __future__ import annotations
 
 from aiogram import F, Router
 from aiogram.filters import Command, CommandStart
 from aiogram.types import CallbackQuery, Message
+from sqlalchemy import func, select
 
 from app.config import settings
 from app.db.engine import session_scope
+from app.db.models import Subscription
 from app.handlers.common import get_or_create_user
 from app.i18n import get_lang, tr
-from app.keyboards.inline import main_menu
+from app.keyboards.inline import back_to_menu, cabinet_keyboard
 from app.services import referral as referral_service
 from app.utils import fmt_money
 
 router = Router()
+
+
+async def _render_cabinet(session, user) -> tuple[str, str]:
+    lang = get_lang(user)
+    active = (
+        await session.execute(
+            select(func.count(Subscription.id)).where(
+                Subscription.user_id == user.id,
+                Subscription.status == "active",
+            )
+        )
+    ).scalar_one()
+    name = user.username or f"tg{user.telegram_id}"
+    text = "\n".join(
+        [
+            f"<b>{tr(lang, 'cabinet_title')}</b>",
+            tr(lang, "cabinet_profile", name=name),
+            "",
+            tr(lang, "cabinet_id", tg_id=user.telegram_id),
+            tr(lang, "cabinet_balance", balance=fmt_money(user.balance)),
+            tr(lang, "cabinet_subs_count", count=active),
+        ]
+    )
+    return text, lang
+
+
+def _cabinet_kb(lang: str, user_id: int):
+    return cabinet_keyboard(
+        lang,
+        is_admin=user_id in settings.admin_ids,
+        channel_link=settings.channel_link,
+        web_link=settings.web_link,
+    )
 
 
 @router.message(CommandStart())
@@ -28,8 +63,12 @@ async def cmd_start(message: Message) -> None:
             referrer = await referral_service.find_by_referral_code(session, args)
             if referrer and referrer.telegram_id != user.telegram_id:
                 user.referred_by = referrer.telegram_id
-        lang = get_lang(user)
-        await message.answer(tr(lang, "hello"), reply_markup=main_menu(lang))
+        text, lang = await _render_cabinet(session, user)
+        await message.answer(
+            text,
+            parse_mode="HTML",
+            reply_markup=_cabinet_kb(lang, message.from_user.id),
+        )
 
 
 @router.callback_query(F.data == "menu")
@@ -38,8 +77,10 @@ async def cb_menu(cb: CallbackQuery) -> None:
         user = await get_or_create_user(
             session, cb.from_user.id, cb.from_user.username
         )
-        lang = get_lang(user)
-        await cb.message.edit_text(tr(lang, "hello"), reply_markup=main_menu(lang))
+        text, lang = await _render_cabinet(session, user)
+        await cb.message.edit_text(
+            text, parse_mode="HTML", reply_markup=_cabinet_kb(lang, cb.from_user.id)
+        )
     await cb.answer()
 
 
@@ -52,7 +93,7 @@ async def cmd_lang(message: Message) -> None:
         user.lang = "en" if get_lang(user) != "en" else "ru"
         lang = get_lang(user)
         await message.answer(
-            tr(lang, "lang_switched", lang=lang), reply_markup=main_menu(lang)
+            tr(lang, "lang_switched", lang=lang), reply_markup=back_to_menu(lang)
         )
 
 
@@ -64,7 +105,10 @@ async def cb_lang(cb: CallbackQuery) -> None:
         )
         user.lang = "en" if get_lang(user) != "en" else "ru"
         lang = get_lang(user)
-        await cb.message.edit_text(tr(lang, "hello"), reply_markup=main_menu(lang))
+        text, _ = await _render_cabinet(session, user)
+        await cb.message.edit_text(
+            text, parse_mode="HTML", reply_markup=_cabinet_kb(lang, cb.from_user.id)
+        )
         await cb.answer(tr(lang, "lang_switched", lang=lang))
 
 
@@ -82,7 +126,7 @@ async def cb_balance(cb: CallbackQuery) -> None:
             percent=settings.referral_percent,
         )
         await cb.message.edit_text(
-            text, parse_mode="HTML", reply_markup=main_menu(lang)
+            text, parse_mode="HTML", reply_markup=back_to_menu(lang)
         )
     await cb.answer()
 
@@ -105,6 +149,36 @@ async def cb_referral(cb: CallbackQuery) -> None:
             percent=settings.referral_percent,
         )
         await cb.message.edit_text(
-            text, parse_mode="HTML", reply_markup=main_menu(lang)
+            text, parse_mode="HTML", reply_markup=back_to_menu(lang)
+        )
+    await cb.answer()
+
+
+@router.callback_query(F.data == "about")
+async def cb_about(cb: CallbackQuery) -> None:
+    async with session_scope() as session:
+        user = await get_or_create_user(
+            session, cb.from_user.id, cb.from_user.username
+        )
+        lang = get_lang(user)
+        await cb.message.edit_text(
+            tr(lang, "about_text"),
+            parse_mode="HTML",
+            reply_markup=back_to_menu(lang),
+        )
+    await cb.answer()
+
+
+@router.callback_query(F.data == "gift")
+async def cb_gift(cb: CallbackQuery) -> None:
+    async with session_scope() as session:
+        user = await get_or_create_user(
+            session, cb.from_user.id, cb.from_user.username
+        )
+        lang = get_lang(user)
+        await cb.message.edit_text(
+            tr(lang, "gift_wip"),
+            parse_mode="HTML",
+            reply_markup=back_to_menu(lang),
         )
     await cb.answer()

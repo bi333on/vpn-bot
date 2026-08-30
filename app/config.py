@@ -49,6 +49,8 @@ class Settings(BaseSettings):
     currency: str = Field(default="RUB", alias="CURRENCY")
     referral_percent: int = Field(default=10, alias="REFERRAL_PERCENT")
     support_link: str = Field(default="https://t.me/support", alias="SUPPORT_LINK")
+    channel_link: str = Field(default="", alias="CHANNEL_LINK")
+    web_link: str = Field(default="", alias="WEB_CABINET_LINK")
 
     # --- Trial ---
     trial_enabled: bool = Field(default=True, alias="TRIAL_ENABLED")

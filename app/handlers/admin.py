@@ -15,6 +15,12 @@ from app.db.engine import session_scope
 from app.db.models import Payment, Plan, PromoCode, Subscription, User
 from app.keyboards.inline import admin_menu
 from app.services.balance import add_balance
+from app.services.git_update import (
+    check_updates,
+    current_commit,
+    git_pull,
+    restart,
+)
 from app.services.remnawave_config import (
     get_remnawave_api_token,
     get_remnawave_api_url,
@@ -570,6 +576,62 @@ async def on_remnawave_node(message: Message, state: FSMContext) -> None:
     await message.answer(
         "✅ Нода Remnawave сохранена.", reply_markup=admin_menu()
     )
+
+
+# ---------- вход из кабинета ----------
+@router.callback_query(F.data == "admin_panel")
+async def cb_admin_panel(cb: CallbackQuery) -> None:
+    if not is_admin(cb.from_user.id):
+        await cb.answer("Нет доступа", show_alert=True)
+        return
+    await cb.message.edit_text("🛠 Админ-панель", reply_markup=admin_menu())
+    await cb.answer()
+
+
+# ---------- git-обновление ----------
+@router.callback_query(F.data == "admin:git")
+async def cb_git(cb: CallbackQuery) -> None:
+    sha = await current_commit()
+    result = await check_updates()
+    kb = InlineKeyboardBuilder()
+    kb.button(text="🔄 Обновить", callback_data="admin:git_pull")
+    kb.button(text="🔙 Назад", callback_data="admin:back")
+    kb.adjust(2)
+    if result["ok"]:
+        if result["behind"] > 0:
+            text = (
+                f"Текущая версия: <code>{sha}</code>\n"
+                f"Доступно обновлений: <b>{result['behind']}</b> коммит(ов)."
+            )
+        else:
+            text = (
+                f"Текущая версия: <code>{sha}</code>\n"
+                "✅ Актуальная версия."
+            )
+    else:
+        text = (
+            f"Текущая версия: <code>{sha}</code>\n"
+            f"⚠️ Не удалось проверить: {result['error']}\n\n"
+            "Обновите вручную на сервере:\n"
+            "<code>cd /opt/vpn-bot && git pull && docker compose up -d --build</code>"
+        )
+    await cb.message.edit_text(text, parse_mode="HTML", reply_markup=kb.as_markup())
+    await cb.answer()
+
+
+@router.callback_query(F.data == "admin:git_pull")
+async def cb_git_pull(cb: CallbackQuery) -> None:
+    out = await git_pull()
+    low = out.lower()
+    if any(word in low for word in ("fatal", "error", "denied", "could not", "not a git")):
+        await cb.message.edit_text(
+            f"❌ Ошибка обновления:\n<code>{out[:400]}</code>", parse_mode="HTML"
+        )
+        await cb.answer()
+        return
+    await cb.message.edit_text("✅ Обновлено. Перезапускаю...")
+    await cb.answer()
+    restart()
 
 
 # ---------- назад в меню админа ----------

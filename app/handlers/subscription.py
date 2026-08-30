@@ -13,8 +13,8 @@ from app.db.models import Plan, Subscription
 from app.handlers.common import get_or_create_user
 from app.i18n import get_lang, tr
 from app.keyboards.inline import (
+    back_to_menu,
     confirm_delete,
-    main_menu,
     renew_keyboard,
     subscription_actions,
 )
@@ -64,7 +64,7 @@ async def cb_subs(cb: CallbackQuery) -> None:
         )
         if not subs:
             await cb.message.edit_text(
-                tr(lang, "subs_empty"), reply_markup=main_menu(lang)
+                tr(lang, "subs_empty"), reply_markup=back_to_menu(lang)
             )
             await cb.answer()
             return
@@ -197,7 +197,7 @@ async def cb_del_confirm(cb: CallbackQuery) -> None:
             await cb.answer(tr(lang, "renew_error", error=exc), show_alert=True)
             return
         await cb.message.edit_text(
-            tr(lang, "deleted"), reply_markup=main_menu(lang)
+            tr(lang, "deleted"), reply_markup=back_to_menu(lang)
         )
     await cb.answer()
 
@@ -271,7 +271,7 @@ async def cb_trial(cb: CallbackQuery) -> None:
         lang = get_lang(user)
         if not settings.trial_enabled or user.trial_used:
             await cb.message.edit_text(
-                tr(lang, "trial_unavailable"), reply_markup=main_menu(lang)
+                tr(lang, "trial_unavailable"), reply_markup=back_to_menu(lang)
             )
             await cb.answer()
             return

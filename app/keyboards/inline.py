@@ -23,6 +23,31 @@ def main_menu(lang: str = "ru") -> InlineKeyboardMarkup:
     return b.as_markup()
 
 
+def cabinet_keyboard(
+    lang: str = "ru",
+    is_admin: bool = False,
+    channel_link: str = "",
+    web_link: str = "",
+) -> InlineKeyboardMarkup:
+    b = InlineKeyboardBuilder()
+    b.button(text=tr(lang, "cabinet_buy"), callback_data="buy")
+    b.button(text=tr(lang, "cabinet_subs"), callback_data="subs")
+    b.button(text=tr(lang, "cabinet_trial"), callback_data="trial")
+    b.button(text=tr(lang, "cabinet_balance_btn"), callback_data="balance")
+    b.button(text=tr(lang, "cabinet_referral"), callback_data="referral")
+    b.button(text=tr(lang, "cabinet_gift"), callback_data="gift")
+    b.button(text=tr(lang, "cabinet_about"), callback_data="about")
+    b.button(text=tr(lang, "cabinet_lang"), callback_data="lang")
+    if is_admin:
+        b.button(text=tr(lang, "cabinet_admin"), callback_data="admin_panel")
+    if channel_link:
+        b.button(text=tr(lang, "cabinet_channel"), url=channel_link)
+    if web_link:
+        b.button(text=tr(lang, "cabinet_web"), url=web_link)
+    b.adjust(1)
+    return b.as_markup()
+
+
 def back_to_menu(lang: str = "ru") -> InlineKeyboardMarkup:
     b = InlineKeyboardBuilder()
     b.button(text=tr(lang, "back_menu"), callback_data="menu")
@@ -113,5 +138,6 @@ def admin_menu() -> InlineKeyboardMarkup:
     b.button(text="🔑 Remnawave API", callback_data="admin:rwkey")
     b.button(text="🖧 Нода Remnawave", callback_data="admin:rwnode")
     b.button(text="📣 Рассылка", callback_data="admin:broadcast")
+    b.button(text="🔄 Git-обновление", callback_data="admin:git")
     b.adjust(2)
     return b.as_markup()
