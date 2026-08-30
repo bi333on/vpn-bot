@@ -55,6 +55,12 @@ class RemnawaveClient:
         """Задать/сбросить UUID ноды, на которой выдавать пользователей."""
         self.node_uuid = node_uuid or None
 
+    def set_api_url(self, url: str | None) -> None:
+        """Задать адрес панели Remnawave (из админки)."""
+        if url:
+            self.base_url = url.rstrip("/")
+            self.sub_url = self.base_url
+
     async def close(self) -> None:
         await self._http.aclose()
 

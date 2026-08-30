@@ -7,8 +7,10 @@ import httpx
 from app.remnawave.client import RemnawaveClient
 from app.services.remnawave_config import (
     get_remnawave_api_token,
+    get_remnawave_api_url,
     get_remnawave_node_uuid,
     set_remnawave_api_token,
+    set_remnawave_api_url,
     set_remnawave_node_uuid,
 )
 
@@ -70,3 +72,17 @@ async def test_remnawave_node_get_set(db_session):
     await set_remnawave_node_uuid(db_session, "node-abc")
     await db_session.flush()
     assert await get_remnawave_node_uuid(db_session) == "node-abc"
+
+
+async def test_remnawave_url_get_set(db_session):
+    assert await get_remnawave_api_url(db_session) is None
+    await set_remnawave_api_url(db_session, "https://panel.test")
+    await db_session.flush()
+    assert await get_remnawave_api_url(db_session) == "https://panel.test"
+
+
+def test_client_set_api_url():
+    client = RemnawaveClient("https://old.test", "", "")
+    client.set_api_url("https://new.test/")
+    assert client.base_url == "https://new.test"
+    assert client.sub_url == "https://new.test"

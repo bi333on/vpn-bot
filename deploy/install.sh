@@ -1,11 +1,14 @@
 #!/usr/bin/env bash
 # Установка VPN-бота на Ubuntu 22.04/24.04 (Docker + Caddy).
 #
-# Одна команда (все параметры через env, сразу запустить):
+# Одна команда (минимум — только бот; Remnawave настраивается в админке):
 #   DOMAIN=bot.example.com \
 #   BOT_TOKEN='...' ADMIN_IDS='...' \
-#   REMNAWAVE_API_URL='https://...' REMNAWAVE_API_TOKEN='...' \
 #   DEPLOY=1 bash /tmp/vpn-install.sh
+#
+# Remnawave-параметры (URL/токен/нода) можно оставить пустыми — они задаются
+# из админки бота (/admin -> 🔗 URL, 🔑 API, 🖧 Нода). Env-переменные ниже —
+# необязательные фолбэки.
 set -euo pipefail
 
 DOMAIN="${DOMAIN:-}"

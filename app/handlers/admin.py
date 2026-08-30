@@ -17,8 +17,10 @@ from app.keyboards.inline import admin_menu
 from app.services.balance import add_balance
 from app.services.remnawave_config import (
     get_remnawave_api_token,
+    get_remnawave_api_url,
     get_remnawave_node_uuid,
     set_remnawave_api_token,
+    set_remnawave_api_url,
     set_remnawave_node_uuid,
 )
 from app.services.subscription import set_device_limit
@@ -49,6 +51,7 @@ class AdminFlow(StatesGroup):
     devices_user = State()
     devices_limit = State()
 
+    remnawave_url = State()
     remnawave_token = State()
     remnawave_node = State()
 
@@ -483,6 +486,34 @@ async def broadcast_text(message: Message, state: FSMContext) -> None:
     await message.answer(
         f"✅ Рассылка завершена: доставлено {sent} из {len(users)}.",
         reply_markup=admin_menu(),
+    )
+
+
+# ---------- Remnawave адрес (URL) ----------
+@router.callback_query(F.data == "admin:rwurl")
+async def cb_rwurl(cb: CallbackQuery, state: FSMContext) -> None:
+    async with session_scope() as session:
+        url = await get_remnawave_api_url(session)
+    await state.set_state(AdminFlow.remnawave_url)
+    await cb.message.edit_text(
+        f"🔗 Текущий адрес Remnawave: {url or '—'}\n\n"
+        "Отправьте URL панели (https://panel.example.com) или /cancel:"
+    )
+    await cb.answer()
+
+
+@router.message(AdminFlow.remnawave_url)
+async def on_remnawave_url(message: Message, state: FSMContext) -> None:
+    url = (message.text or "").strip()
+    if not url:
+        await message.answer("Введите URL панели.")
+        return
+    async with session_scope() as session:
+        await set_remnawave_api_url(session, url)
+    get_remnawave().set_api_url(url)
+    await state.clear()
+    await message.answer(
+        "✅ Адрес Remnawave сохранён.", reply_markup=admin_menu()
     )
 
 

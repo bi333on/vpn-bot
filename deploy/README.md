@@ -37,7 +37,7 @@ cd /opt/vpn-bot
 cp .env.example .env
 nano .env
 ```
-Обязательно заполнить:
+Обязательно заполнить (Remnawave можно настроить и из админки бота, `/admin`):
 ```ini
 BOT_TOKEN=123456:ABC...          # токен из @BotFather
 ADMIN_IDS=123456789              # ваш Telegram ID
@@ -49,14 +49,14 @@ WEBHOOK_HOST=https://bot.example.com
 WEBHOOK_PATH=/telegram
 WEBHOOK_SECRET_TOKEN=случайная-длинная-строка  # секрет для вебхука Telegram
 
-REMNAWAVE_API_URL=https://panel.example.com
-REMNAWAVE_API_TOKEN=            # основной способ: Bearer-токен (можно задать и из админки бота)
-REMNAWAVE_NODE_UUID=            # (опц.) UUID ноды, на которой выдавать пользователей
-REMNAWAVE_NODE_FIELD=nodeUuid   # (опц.) имя поля ноды в POST /api/users
-REMNAWAVE_USERNAME=admin        # fallback, если токен не задан
-REMNAWAVE_PASSWORD=пароль
-REMNAWAVE_SUB_URL=https://panel.example.com
-REMNAWAVE_INBOUND_TAG=          # тег reality-inbound (опционально)
+REMNAWAVE_API_URL=
+REMNAWAVE_API_TOKEN=
+REMNAWAVE_NODE_UUID=
+REMNAWAVE_NODE_FIELD=nodeUuid
+REMNAWAVE_USERNAME=
+REMNAWAVE_PASSWORD=
+REMNAWAVE_SUB_URL=
+REMNAWAVE_INBOUND_TAG=
 
 # Платежи (по необходимости)
 YOOKASSA_ENABLED=true
