@@ -14,6 +14,7 @@ from app.context import get_payments, get_remnawave
 from app.db.engine import session_scope
 from app.db.models import Payment, Plan
 from app.handlers.common import get_or_create_user
+from app.i18n import get_lang, tr
 from app.keyboards.inline import (
     payment_keyboard,
     plans_keyboard,
@@ -50,33 +51,42 @@ async def _render_payment(
         price, discount = compute_discount(plan.price, promo)
 
     user = await get_or_create_user(session, telegram_id, None)
+    lang = get_lang(user)
     balance = int(user.balance or 0)
     providers = get_payments().names()
 
     lines = [
-        f"Тариф: <b>{plan.name}</b>",
-        f"Срок: {plan.duration_days} дн",
-        f"Трафик: {plan.traffic_gb} ГБ",
-        f"Устройства: {plan.devices_limit}",
+        tr(lang, "pay_plan", name=plan.name),
+        tr(lang, "pay_duration", days=plan.duration_days),
+        tr(lang, "pay_traffic", gb=plan.traffic_gb),
+        tr(lang, "pay_devices", devices=plan.devices_limit),
         "",
     ]
     if discount:
-        lines.append(f"Скидка: -{fmt_money(discount)}")
-    lines.append(f"Итого: <b>{fmt_money(price)}</b>")
+        lines.append(tr(lang, "pay_discount", discount=fmt_money(discount)))
+    lines.append(tr(lang, "pay_total", price=fmt_money(price)))
     if 0 < balance < price:
         lines.append(
-            f"Баланс {fmt_money(balance)} будет применён, "
-            f"к доплате {fmt_money(price - balance)}"
+            tr(
+                lang,
+                "pay_partial",
+                balance=fmt_money(balance),
+                rest=fmt_money(price - balance),
+            )
         )
     text = "\n".join(lines)
     return text, payment_keyboard(
-        balance=balance, price=price, provider_names=providers
+        balance=balance, price=price, provider_names=providers, lang=lang
     )
 
 
 @router.callback_query(F.data == "buy")
 async def cb_buy(cb: CallbackQuery, state: FSMContext) -> None:
     async with session_scope() as session:
+        user = await get_or_create_user(
+            session, cb.from_user.id, cb.from_user.username
+        )
+        lang = get_lang(user)
         plans = (
             (
                 await session.execute(
@@ -89,14 +99,12 @@ async def cb_buy(cb: CallbackQuery, state: FSMContext) -> None:
             .all()
         )
         if not plans:
-            await cb.message.edit_text(
-                "Тарифы пока не настроены. Обратитесь в поддержку."
-            )
+            await cb.message.edit_text(tr(lang, "buy_no_plans"))
             await cb.answer()
             return
         await state.clear()
         await cb.message.edit_text(
-            "Выберите тариф:", reply_markup=plans_keyboard(plans)
+            tr(lang, "buy_choose"), reply_markup=plans_keyboard(plans, lang)
         )
     await cb.answer()
 
@@ -106,9 +114,13 @@ async def cb_plan(cb: CallbackQuery, state: FSMContext) -> None:
     plan_id = int(cb.data.split(":")[1])
     await state.update_data(plan_id=plan_id, promo_code=None)
     await state.set_state(PurchaseFlow.waiting_for_promo)
+    async with session_scope() as session:
+        user = await get_or_create_user(
+            session, cb.from_user.id, cb.from_user.username
+        )
+        lang = get_lang(user)
     await cb.message.edit_text(
-        "Введите промокод (если есть) или нажмите «Пропустить»:",
-        reply_markup=promo_skip_keyboard(),
+        tr(lang, "promo_prompt"), reply_markup=promo_skip_keyboard(lang)
     )
     await cb.answer()
 
@@ -117,12 +129,14 @@ async def cb_plan(cb: CallbackQuery, state: FSMContext) -> None:
 async def on_promo(message: Message, state: FSMContext) -> None:
     code = (message.text or "").strip()
     async with session_scope() as session:
+        user = await get_or_create_user(
+            session, message.from_user.id, message.from_user.username
+        )
+        lang = get_lang(user)
         promo = await validate_promo(session, code)
         if promo is None:
             await message.answer(
-                "Промокод не найден или недействителен. Попробуйте ещё раз "
-                "или нажмите «Пропустить».",
-                reply_markup=promo_skip_keyboard(),
+                tr(lang, "promo_invalid"), reply_markup=promo_skip_keyboard(lang)
             )
             return
         await state.update_data(promo_code=promo.code)
@@ -150,6 +164,7 @@ async def cb_pay_balance(cb: CallbackQuery, state: FSMContext) -> None:
         user = await get_or_create_user(
             session, cb.from_user.id, cb.from_user.username
         )
+        lang = get_lang(user)
         data = await state.get_data()
         plan = await session.get(Plan, int(data["plan_id"]))
         promo = (
@@ -165,7 +180,7 @@ async def cb_pay_balance(cb: CallbackQuery, state: FSMContext) -> None:
             session, user, price, f"Оплата тарифа {plan.name}"
         )
         if not ok:
-            await cb.answer("Недостаточно средств на балансе", show_alert=True)
+            await cb.answer(tr(lang, "pay_insufficient"), show_alert=True)
             return
         if promo:
             await mark_promo_used(session, promo)
@@ -182,10 +197,12 @@ async def cb_pay_balance(cb: CallbackQuery, state: FSMContext) -> None:
                 paid_amount=price,
             )
         except Exception as exc:  # noqa: BLE001
-            await cb.answer(f"Ошибка активации: {exc}", show_alert=True)
+            await cb.answer(
+                tr(lang, "pay_activation_error", error=exc), show_alert=True
+            )
             return
         await state.clear()
-        await cb.message.answer("✅ Оплата с баланса прошла успешно.")
+        await cb.message.answer(tr(lang, "pay_balance_ok"))
         await send_subscription_config(cb.bot, user, sub)
     await cb.answer()
 
@@ -197,13 +214,14 @@ async def cb_pay_provider(cb: CallbackQuery, state: FSMContext) -> None:
     provider_name = cb.data.split(":", 1)[1]
     provider = get_payments().get(provider_name)
     if provider is None:
-        await cb.answer("Платёжный метод недоступен", show_alert=True)
+        await cb.answer(tr("ru", "pay_unavailable"), show_alert=True)
         return
 
     async with session_scope() as session:
         user = await get_or_create_user(
             session, cb.from_user.id, cb.from_user.username
         )
+        lang = get_lang(user)
         data = await state.get_data()
         plan = await session.get(Plan, int(data["plan_id"]))
         promo_code = data.get("promo_code")
@@ -247,7 +265,9 @@ async def cb_pay_provider(cb: CallbackQuery, state: FSMContext) -> None:
             )
         except Exception as exc:  # noqa: BLE001
             await session.delete(payment)
-            await cb.answer(f"Ошибка создания счёта: {exc}", show_alert=True)
+            await cb.answer(
+                tr(lang, "pay_invoice_error", error=exc), show_alert=True
+            )
             return
 
         payment.provider_payment_id = invoice.provider_payment_id
@@ -255,10 +275,9 @@ async def cb_pay_provider(cb: CallbackQuery, state: FSMContext) -> None:
 
         kb = InlineKeyboardBuilder()
         if invoice.pay_url:
-            kb.button(text="💳 Оплатить", url=invoice.pay_url)
+            kb.button(text=tr(lang, "pay_pay"), url=invoice.pay_url)
         await cb.message.edit_text(
-            f"Счёт создан. К оплате: <b>{fmt_money(invoice_amount)}</b>.\n"
-            "После оплаты подписка активируется автоматически.",
+            tr(lang, "pay_invoice_created", amount=fmt_money(invoice_amount)),
             parse_mode="HTML",
             reply_markup=kb.as_markup() if invoice.pay_url else None,
         )

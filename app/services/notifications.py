@@ -4,6 +4,7 @@ from __future__ import annotations
 from aiogram import Bot
 
 from app.db.models import NotificationLog, Subscription, User
+from app.i18n import get_lang, tr
 from app.utils import fmt_bytes, fmt_money
 
 
@@ -19,11 +20,9 @@ async def notify_expiry(
     days_left: int,
 ) -> None:
     await _log(session, user.id, "expiry", {"subscription_id": sub.id, "days_left": days_left})
-    text = (
-        f"⚠️ Ваша подписка истекает через {days_left} дн.\n\n"
-        "Продлите её заранее, чтобы не остаться без доступа."
+    await bot.send_message(
+        user.telegram_id, tr(get_lang(user), "notify_expiry", days=days_left)
     )
-    await bot.send_message(user.telegram_id, text)
 
 
 async def notify_traffic(
@@ -34,12 +33,16 @@ async def notify_traffic(
     percent: int,
 ) -> None:
     await _log(session, user.id, "traffic", {"subscription_id": sub.id, "percent": percent})
-    text = (
-        f"📊 Вы израсходовали {percent}% трафика.\n"
-        f"Использовано: {fmt_bytes(sub.traffic_used_bytes)} из "
-        f"{fmt_bytes(sub.traffic_limit_bytes)}."
+    await bot.send_message(
+        user.telegram_id,
+        tr(
+            get_lang(user),
+            "notify_traffic",
+            percent=percent,
+            used=fmt_bytes(sub.traffic_used_bytes),
+            limit=fmt_bytes(sub.traffic_limit_bytes),
+        ),
     )
-    await bot.send_message(user.telegram_id, text)
 
 
 async def notify_payment_success(bot: Bot, user: User, paid: int) -> None:

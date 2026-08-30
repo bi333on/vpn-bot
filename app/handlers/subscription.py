@@ -1,4 +1,4 @@
-"""Мои подписки: список, конфиг, QR, продление, удаление, trial."""
+"""Мои подписки: список, конфиг, QR, продление, удаление, trial, автопродление."""
 from __future__ import annotations
 
 from aiogram import F, Router
@@ -11,6 +11,7 @@ from app.context import get_remnawave
 from app.db.engine import session_scope
 from app.db.models import Plan, Subscription
 from app.handlers.common import get_or_create_user
+from app.i18n import get_lang, tr
 from app.keyboards.inline import (
     confirm_delete,
     main_menu,
@@ -30,15 +31,16 @@ from app.utils import fmt_bytes, fmt_money
 router = Router()
 
 
-def _sub_detail(sub: Subscription) -> str:
+def _sub_detail(sub: Subscription, lang: str) -> str:
     emoji = "🟢" if sub.status == "active" else "🔴"
     date = sub.expires_at.strftime("%d.%m.%Y") if sub.expires_at else "—"
-    label = "Trial" if sub.is_trial else "Подписка"
+    label = tr(lang, "sub_label_trial" if sub.is_trial else "sub_label")
+    auto = tr(lang, "sub_autorenew_on" if sub.auto_renew else "sub_autorenew_off")
     return (
         f"{emoji} <b>{label} #{sub.id}</b>\n"
-        f"Трафик: {fmt_bytes(sub.traffic_used_bytes)} / "
-        f"{fmt_bytes(sub.traffic_limit_bytes)}\n"
-        f"До: {date} · Устройств: {sub.devices_limit}"
+        f"{tr(lang, 'sub_traffic', used=fmt_bytes(sub.traffic_used_bytes), limit=fmt_bytes(sub.traffic_limit_bytes))}\n"
+        f"{tr(lang, 'sub_until', date=date, devices=sub.devices_limit)}\n"
+        f"{auto}"
     )
 
 
@@ -48,6 +50,7 @@ async def cb_subs(cb: CallbackQuery) -> None:
         user = await get_or_create_user(
             session, cb.from_user.id, cb.from_user.username
         )
+        lang = get_lang(user)
         subs = (
             (
                 await session.execute(
@@ -61,17 +64,21 @@ async def cb_subs(cb: CallbackQuery) -> None:
         )
         if not subs:
             await cb.message.edit_text(
-                "У вас пока нет подписок. Купите первую! 🛒",
-                reply_markup=main_menu(),
+                tr(lang, "subs_empty"), reply_markup=main_menu(lang)
             )
             await cb.answer()
             return
         kb = InlineKeyboardBuilder()
         for sub in subs:
-            kb.button(text=f"Открыть #{sub.id}", callback_data=f"sub:{sub.id}")
+            kb.button(
+                text=tr(lang, "sub_open", id=sub.id),
+                callback_data=f"sub:{sub.id}",
+            )
         kb.adjust(1)
-        kb.button(text="🔙 В меню", callback_data="menu")
-        text = "Ваши подписки:\n\n" + "\n\n".join(_sub_detail(s) for s in subs)
+        kb.button(text=tr(lang, "back_menu"), callback_data="menu")
+        text = tr(lang, "subs_title") + "\n\n" + "\n\n".join(
+            _sub_detail(s, lang) for s in subs
+        )
         await cb.message.edit_text(
             text, parse_mode="HTML", reply_markup=kb.as_markup()
         )
@@ -83,15 +90,42 @@ async def cb_sub(cb: CallbackQuery) -> None:
     sub_id = int(cb.data.split(":")[1])
     async with session_scope() as session:
         sub = await session.get(Subscription, sub_id)
+        user = await get_or_create_user(
+            session, cb.from_user.id, cb.from_user.username
+        )
+        lang = get_lang(user)
         if sub is None:
-            await cb.answer("Подписка не найдена", show_alert=True)
+            await cb.answer(tr(lang, "sub_not_found"), show_alert=True)
             return
         await cb.message.edit_text(
-            _sub_detail(sub),
+            _sub_detail(sub, lang),
             parse_mode="HTML",
-            reply_markup=subscription_actions(sub.id),
+            reply_markup=subscription_actions(sub.id, sub.auto_renew, lang),
         )
     await cb.answer()
+
+
+@router.callback_query(F.data.startswith("autorenew:"))
+async def cb_autorenew(cb: CallbackQuery) -> None:
+    sub_id = int(cb.data.split(":")[1])
+    async with session_scope() as session:
+        sub = await session.get(Subscription, sub_id)
+        user = await get_or_create_user(
+            session, cb.from_user.id, cb.from_user.username
+        )
+        lang = get_lang(user)
+        if sub is None or sub.user_id != user.id:
+            await cb.answer(tr(lang, "sub_not_found"), show_alert=True)
+            return
+        sub.auto_renew = not sub.auto_renew
+        await cb.message.edit_text(
+            _sub_detail(sub, lang),
+            parse_mode="HTML",
+            reply_markup=subscription_actions(sub.id, sub.auto_renew, lang),
+        )
+        await cb.answer(
+            tr(lang, "autorenew_on" if sub.auto_renew else "autorenew_off")
+        )
 
 
 @router.callback_query(F.data.startswith("cfg:"))
@@ -99,8 +133,12 @@ async def cb_cfg(cb: CallbackQuery) -> None:
     sub_id = int(cb.data.split(":")[1])
     async with session_scope() as session:
         sub = await session.get(Subscription, sub_id)
+        user = await get_or_create_user(
+            session, cb.from_user.id, cb.from_user.username
+        )
+        lang = get_lang(user)
         if sub is None or not sub.config_link:
-            await cb.answer("Конфиг недоступен", show_alert=True)
+            await cb.answer(tr(lang, "cfg_unavailable"), show_alert=True)
             return
         await cb.message.answer(
             f"<code>{sub.config_link}</code>", parse_mode="HTML"
@@ -113,8 +151,12 @@ async def cb_qr(cb: CallbackQuery) -> None:
     sub_id = int(cb.data.split(":")[1])
     async with session_scope() as session:
         sub = await session.get(Subscription, sub_id)
+        user = await get_or_create_user(
+            session, cb.from_user.id, cb.from_user.username
+        )
+        lang = get_lang(user)
         if sub is None or not sub.config_link:
-            await cb.answer("Конфиг недоступен", show_alert=True)
+            await cb.answer(tr(lang, "cfg_unavailable"), show_alert=True)
             return
         png = make_qr_png(sub.config_link)
         await cb.message.answer_photo(
@@ -126,9 +168,13 @@ async def cb_qr(cb: CallbackQuery) -> None:
 @router.callback_query(F.data.startswith("del:"))
 async def cb_del(cb: CallbackQuery) -> None:
     sub_id = int(cb.data.split(":")[1])
+    async with session_scope() as session:
+        user = await get_or_create_user(
+            session, cb.from_user.id, cb.from_user.username
+        )
+        lang = get_lang(user)
     await cb.message.edit_text(
-        "Удалить подписку? Конфиг перестанет работать.",
-        reply_markup=confirm_delete(sub_id),
+        tr(lang, "del_confirm"), reply_markup=confirm_delete(sub_id, lang)
     )
     await cb.answer()
 
@@ -138,15 +184,21 @@ async def cb_del_confirm(cb: CallbackQuery) -> None:
     sub_id = int(cb.data.split(":")[1])
     async with session_scope() as session:
         sub = await session.get(Subscription, sub_id)
+        user = await get_or_create_user(
+            session, cb.from_user.id, cb.from_user.username
+        )
+        lang = get_lang(user)
         if sub is None:
-            await cb.answer("Подписка не найдена", show_alert=True)
+            await cb.answer(tr(lang, "sub_not_found"), show_alert=True)
             return
         try:
             await delete_subscription(session, get_remnawave(), sub)
         except Exception as exc:  # noqa: BLE001
-            await cb.answer(f"Ошибка удаления: {exc}", show_alert=True)
+            await cb.answer(tr(lang, "renew_error", error=exc), show_alert=True)
             return
-        await cb.message.edit_text("Подписка удалена.", reply_markup=main_menu())
+        await cb.message.edit_text(
+            tr(lang, "deleted"), reply_markup=main_menu(lang)
+        )
     await cb.answer()
 
 
@@ -155,14 +207,22 @@ async def cb_renew(cb: CallbackQuery) -> None:
     sub_id = int(cb.data.split(":")[1])
     async with session_scope() as session:
         sub = await session.get(Subscription, sub_id)
+        user = await get_or_create_user(
+            session, cb.from_user.id, cb.from_user.username
+        )
+        lang = get_lang(user)
         if sub is None or sub.plan_id is None:
-            await cb.answer("Подписку нельзя продлить", show_alert=True)
+            await cb.answer(tr(lang, "renew_not_available"), show_alert=True)
             return
         plan = await session.get(Plan, sub.plan_id)
         await cb.message.edit_text(
-            f"Продлить на {plan.duration_days} дн за {fmt_money(plan.price)} "
-            "(оплата с баланса)?",
-            reply_markup=renew_keyboard(sub.id),
+            tr(
+                lang,
+                "renew_prompt",
+                days=plan.duration_days,
+                price=fmt_money(plan.price),
+            ),
+            reply_markup=renew_keyboard(sub.id, lang),
         )
     await cb.answer()
 
@@ -174,19 +234,17 @@ async def cb_renew_confirm(cb: CallbackQuery) -> None:
         user = await get_or_create_user(
             session, cb.from_user.id, cb.from_user.username
         )
+        lang = get_lang(user)
         sub = await session.get(Subscription, sub_id)
         plan = await session.get(Plan, sub.plan_id)
         if sub is None or plan is None:
-            await cb.answer("Подписка не найдена", show_alert=True)
+            await cb.answer(tr(lang, "sub_not_found"), show_alert=True)
             return
         ok = await spend_balance(
             session, user, plan.price, f"Продление подписки #{sub.id}"
         )
         if not ok:
-            await cb.answer(
-                "Недостаточно средств. Купите новый тариф или пополните баланс.",
-                show_alert=True,
-            )
+            await cb.answer(tr(lang, "renew_insufficient"), show_alert=True)
             return
         try:
             await extend_subscription(
@@ -198,9 +256,9 @@ async def cb_renew_confirm(cb: CallbackQuery) -> None:
                 devices_limit=plan.devices_limit,
             )
         except Exception as exc:  # noqa: BLE001
-            await cb.answer(f"Ошибка продления: {exc}", show_alert=True)
+            await cb.answer(tr(lang, "renew_error", error=exc), show_alert=True)
             return
-        await cb.message.answer("✅ Подписка продлена.")
+        await cb.message.answer(tr(lang, "renewed"))
     await cb.answer()
 
 
@@ -210,9 +268,10 @@ async def cb_trial(cb: CallbackQuery) -> None:
         user = await get_or_create_user(
             session, cb.from_user.id, cb.from_user.username
         )
+        lang = get_lang(user)
         if not settings.trial_enabled or user.trial_used:
             await cb.message.edit_text(
-                "Пробный период недоступен.", reply_markup=main_menu()
+                tr(lang, "trial_unavailable"), reply_markup=main_menu(lang)
             )
             await cb.answer()
             return
@@ -229,9 +288,11 @@ async def cb_trial(cb: CallbackQuery) -> None:
                 remark="VPN Trial",
             )
         except Exception as exc:  # noqa: BLE001
-            await cb.answer(f"Ошибка активации: {exc}", show_alert=True)
+            await cb.answer(
+                tr(lang, "pay_activation_error", error=exc), show_alert=True
+            )
             return
         user.trial_used = True
-        await cb.message.answer("🎁 Пробный период активирован!")
+        await cb.message.answer(tr(lang, "trial_activated"))
         await send_subscription_config(cb.bot, user, sub)
     await cb.answer()

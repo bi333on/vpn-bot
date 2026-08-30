@@ -5,6 +5,7 @@ from aiogram import Bot
 from aiogram.types import BufferedInputFile
 
 from app.db.models import Subscription, User
+from app.i18n import get_lang, tr
 from app.services.qr import make_qr_png
 from app.utils import fmt_bytes
 
@@ -12,14 +13,17 @@ from app.utils import fmt_bytes
 async def send_subscription_config(
     bot: Bot, user: User, sub: Subscription
 ) -> None:
+    lang = get_lang(user)
     lines = [
-        "✅ <b>Подписка активирована!</b>",
+        tr(lang, "config_activated"),
         "",
-        f"Трафик: <b>{fmt_bytes(sub.traffic_limit_bytes)}</b>",
-        f"Устройства: <b>{sub.devices_limit}</b>",
+        tr(lang, "config_traffic", traffic=fmt_bytes(sub.traffic_limit_bytes)),
+        tr(lang, "config_devices", devices=sub.devices_limit),
     ]
     if sub.expires_at:
-        lines.append(f"Действует до: <b>{sub.expires_at.strftime('%d.%m.%Y')}</b>")
+        lines.append(
+            tr(lang, "config_until", date=sub.expires_at.strftime("%d.%m.%Y"))
+        )
     text = "\n".join(lines)
 
     await bot.send_message(user.telegram_id, text, parse_mode="HTML")
@@ -33,10 +37,10 @@ async def send_subscription_config(
         await bot.send_photo(
             user.telegram_id,
             BufferedInputFile(png, filename="vpn_qr.png"),
-            caption="Отсканируйте QR в клиенте (v2rayNG, Streisand, Nekoray и др.)",
+            caption=tr(lang, "config_scan"),
         )
     else:
         await bot.send_message(
             user.telegram_id,
-            "⚠️ Не удалось сформировать ссылку. Обратитесь в поддержку.",
+            tr(lang, "config_unavailable"),
         )

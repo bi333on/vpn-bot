@@ -6,88 +6,97 @@ from aiogram.utils.keyboard import InlineKeyboardBuilder
 
 from app.config import settings
 from app.db.models import Plan
+from app.i18n import tr
 from app.utils import fmt_money
 
 
-def main_menu() -> InlineKeyboardMarkup:
+def main_menu(lang: str = "ru") -> InlineKeyboardMarkup:
     b = InlineKeyboardBuilder()
-    b.button(text="🛒 Купить", callback_data="buy")
-    b.button(text="📱 Мои подписки", callback_data="subs")
-    b.button(text="🎁 Пробный период", callback_data="trial")
-    b.button(text="👥 Реферальная программа", callback_data="referral")
-    b.button(text="💰 Баланс", callback_data="balance")
-    b.button(text="💬 Поддержка", url=settings.support_link)
+    b.button(text=tr(lang, "menu_buy"), callback_data="buy")
+    b.button(text=tr(lang, "menu_subs"), callback_data="subs")
+    b.button(text=tr(lang, "menu_trial"), callback_data="trial")
+    b.button(text=tr(lang, "menu_referral"), callback_data="referral")
+    b.button(text=tr(lang, "menu_balance"), callback_data="balance")
+    b.button(text=tr(lang, "menu_lang"), callback_data="lang")
+    b.button(text=tr(lang, "menu_support"), url=settings.support_link)
     b.adjust(2)
     return b.as_markup()
 
 
-def back_to_menu() -> InlineKeyboardMarkup:
+def back_to_menu(lang: str = "ru") -> InlineKeyboardMarkup:
     b = InlineKeyboardBuilder()
-    b.button(text="🔙 В меню", callback_data="menu")
+    b.button(text=tr(lang, "back_menu"), callback_data="menu")
     return b.as_markup()
 
 
-def plans_keyboard(plans: list[Plan]) -> InlineKeyboardMarkup:
+def plans_keyboard(plans: list[Plan], lang: str = "ru") -> InlineKeyboardMarkup:
     b = InlineKeyboardBuilder()
     for plan in plans:
-        label = f"{plan.name} — {fmt_money(plan.price)} / {plan.duration_days} дн"
+        period = tr(lang, "plan_days", days=plan.duration_days)
+        label = f"{plan.name} — {fmt_money(plan.price)} / {period}"
         b.button(text=label, callback_data=f"plan:{plan.id}")
     b.adjust(1)
-    b.button(text="🔙 Назад", callback_data="menu")
+    b.button(text=tr(lang, "back"), callback_data="menu")
     return b.as_markup()
 
 
-def promo_skip_keyboard() -> InlineKeyboardMarkup:
+def promo_skip_keyboard(lang: str = "ru") -> InlineKeyboardMarkup:
     b = InlineKeyboardBuilder()
-    b.button(text="Пропустить ➡️", callback_data="skip_promo")
-    b.button(text="🔙 Назад", callback_data="buy")
+    b.button(text=tr(lang, "promo_skip"), callback_data="skip_promo")
+    b.button(text=tr(lang, "back"), callback_data="buy")
     b.adjust(1)
     return b.as_markup()
 
 
 def payment_keyboard(
-    *, balance: int, price: int, provider_names: list[str]
+    *, balance: int, price: int, provider_names: list[str], lang: str = "ru"
 ) -> InlineKeyboardMarkup:
     b = InlineKeyboardBuilder()
     if balance >= price:
         b.button(
-            text=f"💰 Оплатить с баланса ({fmt_money(price)})",
+            text=tr(lang, "pay_balance_btn", price=fmt_money(price)),
             callback_data="pay_balance",
         )
     if "yookassa" in provider_names:
-        b.button(text="💳 Картой / СБП", callback_data="pay:yookassa")
+        b.button(text=tr(lang, "pay_yookassa"), callback_data="pay:yookassa")
     if "cryptobot" in provider_names:
-        b.button(text="🪙 CryptoBot (USDT)", callback_data="pay:cryptobot")
+        b.button(text=tr(lang, "pay_cryptobot"), callback_data="pay:cryptobot")
     if "rollypay" in provider_names:
-        b.button(text="🧾 RollyPay", callback_data="pay:rollypay")
-    b.button(text="🔙 Назад", callback_data="buy")
+        b.button(text=tr(lang, "pay_rollypay"), callback_data="pay:rollypay")
+    b.button(text=tr(lang, "back"), callback_data="buy")
     b.adjust(1)
     return b.as_markup()
 
 
-def subscription_actions(sub_id: int) -> InlineKeyboardMarkup:
+def subscription_actions(
+    sub_id: int, auto_renew: bool, lang: str = "ru"
+) -> InlineKeyboardMarkup:
     b = InlineKeyboardBuilder()
-    b.button(text="🔗 Конфиг", callback_data=f"cfg:{sub_id}")
-    b.button(text="📷 QR", callback_data=f"qr:{sub_id}")
-    b.button(text="🔁 Продлить", callback_data=f"renew:{sub_id}")
-    b.button(text="🗑 Удалить", callback_data=f"del:{sub_id}")
+    b.button(text=tr(lang, "sub_cfg"), callback_data=f"cfg:{sub_id}")
+    b.button(text=tr(lang, "sub_qr"), callback_data=f"qr:{sub_id}")
+    b.button(text=tr(lang, "sub_renew"), callback_data=f"renew:{sub_id}")
+    b.button(text=tr(lang, "sub_delete"), callback_data=f"del:{sub_id}")
+    b.button(
+        text=tr(lang, "autorenew_btn_on" if auto_renew else "autorenew_btn_off"),
+        callback_data=f"autorenew:{sub_id}",
+    )
     b.adjust(2)
-    b.button(text="🔙 В меню", callback_data="menu")
+    b.button(text=tr(lang, "back_menu"), callback_data="menu")
     return b.as_markup()
 
 
-def confirm_delete(sub_id: int) -> InlineKeyboardMarkup:
+def confirm_delete(sub_id: int, lang: str = "ru") -> InlineKeyboardMarkup:
     b = InlineKeyboardBuilder()
-    b.button(text="✅ Да, удалить", callback_data=f"del_confirm:{sub_id}")
-    b.button(text="❌ Отмена", callback_data=f"cfg:{sub_id}")
+    b.button(text=tr(lang, "del_yes"), callback_data=f"del_confirm:{sub_id}")
+    b.button(text=tr(lang, "del_cancel"), callback_data=f"cfg:{sub_id}")
     b.adjust(2)
     return b.as_markup()
 
 
-def renew_keyboard(sub_id: int) -> InlineKeyboardMarkup:
+def renew_keyboard(sub_id: int, lang: str = "ru") -> InlineKeyboardMarkup:
     b = InlineKeyboardBuilder()
-    b.button(text="✅ Продлить ещё раз", callback_data=f"renew_confirm:{sub_id}")
-    b.button(text="❌ Отмена", callback_data="subs")
+    b.button(text=tr(lang, "renew_yes"), callback_data=f"renew_confirm:{sub_id}")
+    b.button(text=tr(lang, "del_cancel"), callback_data="subs")
     b.adjust(2)
     return b.as_markup()
 

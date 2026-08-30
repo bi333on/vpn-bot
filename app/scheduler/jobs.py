@@ -10,7 +10,9 @@ from sqlalchemy import select
 from app.config import settings
 from app.context import get_remnawave
 from app.db.engine import session_scope
-from app.db.models import NotificationLog, Subscription, User
+from app.db.models import NotificationLog, Plan, Subscription, User
+from app.i18n import get_lang, tr
+from app.services.autopay import try_auto_renew
 from app.services.notifications import notify_expiry, notify_traffic
 from app.services.settings import is_notifications_enabled
 
@@ -61,11 +63,59 @@ async def sync_subscriptions() -> None:
                     or 0
                 )
                 sub.traffic_used_bytes = used
-                if sub.expires_at and sub.expires_at < now:
+                if sub.expires_at and sub.expires_at < now and not sub.auto_renew:
                     sub.status = "expired"
                     await client.disable_user(sub.remnawave_short_uuid)
             except Exception:  # noqa: BLE001
                 continue
+
+
+async def process_auto_renewals(bot: Bot) -> None:
+    """Автопродление по балансу: полный период или 1 день."""
+    client = get_remnawave()
+    now = _utcnow()
+    async with session_scope() as session:
+        subs = (
+            (
+                await session.execute(
+                    select(Subscription).where(
+                        Subscription.status == "active",
+                        Subscription.auto_renew.is_(True),
+                        Subscription.expires_at <= now,
+                    )
+                )
+            )
+            .scalars()
+            .all()
+        )
+        for sub in subs:
+            user = await session.get(User, sub.user_id)
+            if user is None:
+                continue
+            try:
+                result = await try_auto_renew(session, client, sub, user)
+            except Exception:  # noqa: BLE001
+                continue
+            lang = get_lang(user)
+            try:
+                if result == "insufficient":
+                    sub.auto_renew = False
+                    await bot.send_message(
+                        user.telegram_id, tr(lang, "autorenew_failed")
+                    )
+                elif result == "renewed_day":
+                    await bot.send_message(
+                        user.telegram_id, tr(lang, "autorenew_renewed_day")
+                    )
+                elif result == "renewed_full":
+                    plan = await session.get(Plan, sub.plan_id)
+                    days = plan.duration_days if plan else 0
+                    await bot.send_message(
+                        user.telegram_id,
+                        tr(lang, "autorenew_renewed", days=days),
+                    )
+            except Exception:  # noqa: BLE001
+                pass
 
 
 async def check_notifications(bot: Bot) -> None:
@@ -118,6 +168,14 @@ def start_scheduler(bot: Bot) -> AsyncIOScheduler:
         "interval",
         minutes=30,
         id="sync_subscriptions",
+        replace_existing=True,
+    )
+    scheduler.add_job(
+        process_auto_renewals,
+        "interval",
+        minutes=10,
+        args=[bot],
+        id="process_auto_renewals",
         replace_existing=True,
     )
     scheduler.add_job(

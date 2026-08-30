@@ -87,6 +87,7 @@ class Subscription(Base):
     )
     is_trial: Mapped[bool] = mapped_column(Boolean, default=False)
     devices_limit: Mapped[int] = mapped_column(Integer, default=1)
+    auto_renew: Mapped[bool] = mapped_column(Boolean, default=False)
     config_link: Mapped[Optional[str]] = mapped_column(Text, nullable=True)
 
 
