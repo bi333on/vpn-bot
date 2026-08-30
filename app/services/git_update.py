@@ -4,6 +4,8 @@ from __future__ import annotations
 import asyncio
 import os
 
+from aiogram.utils.keyboard import InlineKeyboardBuilder
+
 # В Docker WORKDIR=/app, в dev — корень репозитория (bot/).
 REPO_DIR = os.getcwd()
 
@@ -84,12 +86,15 @@ async def notify_update_complete(bot) -> None:
     from app.config import settings
 
     sha = await current_commit()
+    kb = InlineKeyboardBuilder()
+    kb.button(text="🛠 Админ-панель", callback_data="admin_panel")
     for admin_id in settings.admin_ids:
         try:
             await bot.send_message(
                 admin_id,
                 f"✅ Обновление завершено.\nТекущая версия: <code>{sha}</code>",
                 parse_mode="HTML",
+                reply_markup=kb.as_markup(),
             )
         except Exception:  # noqa: BLE001
             continue
