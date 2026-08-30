@@ -1,0 +1,6 @@
+# Caddy для Telegram-бота (HTTPS авто).
+# Замените __DOMAIN__ на домен бота при деплое.
+__DOMAIN__ {
+    encode zstd gzip
+    reverse_proxy localhost:8000
+}
