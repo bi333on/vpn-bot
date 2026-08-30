@@ -30,9 +30,15 @@ BUTTON_SLOTS: list = [
 # Экраны, над которыми можно ставить картинку.
 SCREENS = ["cabinet", "balance", "buy", "subs"]
 
+# Слот -> (эмодзи, label_key, callback)
+SLOT_MAP: dict = {
+    slot: (emoji, label_key, callback)
+    for slot, emoji, label_key, callback in BUTTON_SLOTS
+}
+
 
 def default_design() -> dict:
-    return {"emoji": {}, "labels": {}, "buttons": [], "images": {}, "columns": 1}
+    return {"emoji": {}, "labels": {}, "buttons": [], "images": {}, "columns": 1, "order": []}
 
 
 async def get_design(session) -> dict:
@@ -55,6 +61,30 @@ def get_columns(design: dict) -> int:
     except (TypeError, ValueError):
         n = 1
     return n if n in (1, 2) else 1
+
+
+def get_order(design: dict) -> list:
+    """Порядок слотов кнопок кабинета (недостающие — в конец)."""
+    order = design.get("order") or []
+    if not isinstance(order, list):
+        order = []
+    result = [s for s in order if s in SLOT_MAP]
+    for slot in SLOT_MAP:
+        if slot not in result:
+            result.append(slot)
+    return result
+
+
+def reorder(design: dict, slot: str, direction: str) -> None:
+    """Передвинуть слот вверх/вниз в порядке кнопок."""
+    order = get_order(design)
+    if slot not in order:
+        return
+    i = order.index(slot)
+    j = i - 1 if direction == "up" else i + 1
+    if 0 <= j < len(order):
+        order[i], order[j] = order[j], order[i]
+    design["order"] = order
 
 
 def button_label(slot: str, lang: str, design: dict) -> tuple[str, str]:

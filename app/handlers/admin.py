@@ -18,8 +18,11 @@ from app.services.balance import add_balance
 from app.services.design import (
     BUTTON_SLOTS,
     SCREENS,
+    button_label,
     get_columns,
     get_design,
+    get_order,
+    reorder,
     save_design,
     slot_emoji,
 )
@@ -668,7 +671,8 @@ async def cb_design(cb: CallbackQuery) -> None:
     kb.button(text="🔘 Конструктор кнопок", callback_data="admin:design:buttons")
     kb.button(text="🖼 Картинки", callback_data="admin:design:images")
     kb.button(text=f"🧱 Колонки кнопок: {cols}", callback_data="admin:design:columns")
-    kb.button(text="📋 Шпаргалка Callback", callback_data="admin:design:help")
+    kb.button(text="� Порядок кнопок", callback_data="admin:design:order")
+    kb.button(text="�📋 Шпаргалка Callback", callback_data="admin:design:help")
     kb.button(text="🔙 Назад", callback_data="admin:back")
     kb.adjust(1)
     await cb.message.edit_text(
@@ -705,6 +709,50 @@ async def cb_design_columns_set(cb: CallbackQuery) -> None:
         design["columns"] = n if n in (1, 2) else 1
         await save_design(session, design)
     await cb_design_columns(cb)
+
+
+@router.callback_query(F.data == "admin:design:order")
+async def cb_design_order(cb: CallbackQuery) -> None:
+    async with session_scope() as session:
+        design = await get_design(session)
+    kb = InlineKeyboardBuilder()
+    for slot in get_order(design):
+        text, _ = button_label(slot, "ru", design)
+        kb.button(text="⬆️", callback_data=f"admin:design:order:up:{slot}")
+        kb.button(text=text, callback_data="admin:design:order:noop")
+        kb.button(text="⬇️", callback_data=f"admin:design:order:down:{slot}")
+    kb.button(text="🔙 Назад", callback_data="admin:design")
+    kb.adjust(3)
+    await cb.message.edit_text(
+        "🔀 Порядок кнопок кабинета (сверху вниз).\n"
+        "Нажимайте ⬆️/⬇️, чтобы передвинуть кнопку.",
+        reply_markup=kb.as_markup(),
+    )
+    await cb.answer()
+
+
+@router.callback_query(F.data == "admin:design:order:noop")
+async def cb_design_order_noop(cb: CallbackQuery) -> None:
+    await cb.answer()
+
+
+@router.callback_query(F.data.startswith("admin:design:order:up:"))
+async def cb_design_order_up(cb: CallbackQuery) -> None:
+    await _move_design_slot(cb, "up")
+
+
+@router.callback_query(F.data.startswith("admin:design:order:down:"))
+async def cb_design_order_down(cb: CallbackQuery) -> None:
+    await _move_design_slot(cb, "down")
+
+
+async def _move_design_slot(cb: CallbackQuery, direction: str) -> None:
+    slot = cb.data.rsplit(":", 1)[1]
+    async with session_scope() as session:
+        design = await get_design(session)
+        reorder(design, slot, direction)
+        await save_design(session, design)
+    await cb_design_order(cb)
 
 
 @router.callback_query(F.data == "admin:design:help")

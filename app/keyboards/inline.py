@@ -30,11 +30,11 @@ def cabinet_keyboard(
     web_link: str = "",
     design: dict | None = None,
 ) -> InlineKeyboardMarkup:
-    from app.services.design import BUTTON_SLOTS, button_label, get_columns
+    from app.services.design import button_label, get_columns, get_order
 
     design = design or {}
     b = InlineKeyboardBuilder()
-    for slot, _emoji, _label_key, _callback in BUTTON_SLOTS:
+    for slot in get_order(design):
         if slot == "admin" and not is_admin:
             continue
         text, callback = button_label(slot, lang, design)
