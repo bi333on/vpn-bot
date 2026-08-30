@@ -258,7 +258,9 @@ async def cb_renew_confirm(cb: CallbackQuery) -> None:
         except Exception as exc:  # noqa: BLE001
             await cb.answer(tr(lang, "renew_error", error=exc), show_alert=True)
             return
-        await cb.message.answer(tr(lang, "renewed"))
+        await cb.message.answer(
+            tr(lang, "renewed"), reply_markup=back_to_menu(lang)
+        )
     await cb.answer()
 
 

@@ -6,6 +6,7 @@ from aiogram.types import BufferedInputFile
 
 from app.db.models import Subscription, User
 from app.i18n import get_lang, tr
+from app.keyboards.inline import back_to_menu
 from app.services.qr import make_qr_png
 from app.utils import fmt_bytes
 
@@ -26,7 +27,9 @@ async def send_subscription_config(
         )
     text = "\n".join(lines)
 
-    await bot.send_message(user.telegram_id, text, parse_mode="HTML")
+    await bot.send_message(
+        user.telegram_id, text, parse_mode="HTML", reply_markup=back_to_menu(lang)
+    )
     if sub.config_link:
         await bot.send_message(
             user.telegram_id,
