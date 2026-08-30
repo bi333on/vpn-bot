@@ -28,18 +28,20 @@ def cabinet_keyboard(
     is_admin: bool = False,
     channel_link: str = "",
     web_link: str = "",
+    design: dict | None = None,
 ) -> InlineKeyboardMarkup:
+    from app.services.design import BUTTON_SLOTS, button_label
+
+    design = design or {}
     b = InlineKeyboardBuilder()
-    b.button(text=tr(lang, "cabinet_buy"), callback_data="buy")
-    b.button(text=tr(lang, "cabinet_subs"), callback_data="subs")
-    b.button(text=tr(lang, "cabinet_trial"), callback_data="trial")
-    b.button(text=tr(lang, "cabinet_balance_btn"), callback_data="balance")
-    b.button(text=tr(lang, "cabinet_referral"), callback_data="referral")
-    b.button(text=tr(lang, "cabinet_gift"), callback_data="gift")
-    b.button(text=tr(lang, "cabinet_about"), callback_data="about")
-    b.button(text=tr(lang, "cabinet_lang"), callback_data="lang")
-    if is_admin:
-        b.button(text=tr(lang, "cabinet_admin"), callback_data="admin_panel")
+    for slot, _emoji, _label_key, _callback in BUTTON_SLOTS:
+        if slot == "admin" and not is_admin:
+            continue
+        text, callback = button_label(slot, lang, design)
+        b.button(text=text, callback_data=callback)
+    for btn in design.get("buttons") or []:
+        if btn.get("url"):
+            b.button(text=btn.get("label", ""), url=btn["url"])
     if channel_link:
         b.button(text=tr(lang, "cabinet_channel"), url=channel_link)
     if web_link:
@@ -144,6 +146,7 @@ def admin_menu() -> InlineKeyboardMarkup:
     b.button(text="🔑 Remnawave API", callback_data="admin:rwkey")
     b.button(text="🖧 Нода Remnawave", callback_data="admin:rwnode")
     b.button(text="📣 Рассылка", callback_data="admin:broadcast")
+    b.button(text="🎨 Дизайн", callback_data="admin:design")
     b.button(text="🔄 Git-обновление", callback_data="admin:git")
     b.adjust(2)
     return b.as_markup()

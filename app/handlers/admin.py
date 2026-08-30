@@ -15,6 +15,13 @@ from app.db.engine import session_scope
 from app.db.models import Payment, Plan, PromoCode, Subscription, User
 from app.keyboards.inline import admin_menu, cancel_keyboard
 from app.services.balance import add_balance
+from app.services.design import (
+    BUTTON_SLOTS,
+    SCREENS,
+    get_design,
+    save_design,
+    slot_emoji,
+)
 from app.services.git_update import (
     check_updates,
     current_commit,
@@ -63,6 +70,12 @@ class AdminFlow(StatesGroup):
     remnawave_node = State()
 
     broadcast_text = State()
+
+    design_emoji = State()
+    design_label = State()
+    design_btn_label = State()
+    design_btn_url = State()
+    design_img = State()
 
 
 @router.message(Command("admin"))
@@ -639,6 +652,248 @@ async def on_remnawave_node(message: Message, state: FSMContext) -> None:
     await message.answer(
         "✅ Нода Remnawave сохранена.", reply_markup=admin_menu()
     )
+
+
+# ---------- дизайн ----------
+@router.callback_query(F.data == "admin:design")
+async def cb_design(cb: CallbackQuery) -> None:
+    kb = InlineKeyboardBuilder()
+    kb.button(text="😊 Эмодзи кнопок", callback_data="admin:design:emoji")
+    kb.button(text="🏷 Тексты кнопок", callback_data="admin:design:labels")
+    kb.button(text="🔘 Конструктор кнопок", callback_data="admin:design:buttons")
+    kb.button(text="🖼 Картинки", callback_data="admin:design:images")
+    kb.button(text="📋 Шпаргалка Callback", callback_data="admin:design:help")
+    kb.button(text="🔙 Назад", callback_data="admin:back")
+    kb.adjust(1)
+    await cb.message.edit_text(
+        "🎨 <b>Дизайн</b>", parse_mode="HTML", reply_markup=kb.as_markup()
+    )
+    await cb.answer()
+
+
+@router.callback_query(F.data == "admin:design:help")
+async def cb_design_help(cb: CallbackQuery) -> None:
+    lines = ["📋 <b>Шпаргалка по кнопкам кабинета</b>", ""]
+    for slot, emoji, _label, callback in BUTTON_SLOTS:
+        lines.append(f"{emoji} — <code>{callback}</code>")
+    lines.append("")
+    lines.append("Кастомные кнопки из конструктора — это URL-ссылки.")
+    kb = InlineKeyboardBuilder()
+    kb.button(text="🔙 Назад", callback_data="admin:design")
+    await cb.message.edit_text(
+        "\n".join(lines), parse_mode="HTML", reply_markup=kb.as_markup()
+    )
+    await cb.answer()
+
+
+@router.callback_query(F.data == "admin:design:emoji")
+async def cb_design_emoji(cb: CallbackQuery) -> None:
+    async with session_scope() as session:
+        design = await get_design(session)
+    kb = InlineKeyboardBuilder()
+    for slot, _e, _l, _c in BUTTON_SLOTS:
+        cur = slot_emoji(slot, design)
+        kb.button(text=f"{slot}: {cur}", callback_data=f"admin:design:emoji:{slot}")
+    kb.button(text="🔙 Назад", callback_data="admin:design")
+    kb.adjust(1)
+    await cb.message.edit_text(
+        "😊 Выберите кнопку для замены эмодзи:", reply_markup=kb.as_markup()
+    )
+    await cb.answer()
+
+
+@router.callback_query(F.data.startswith("admin:design:emoji:"))
+async def cb_design_emoji_slot(cb: CallbackQuery, state: FSMContext) -> None:
+    slot = cb.data.rsplit(":", 1)[1]
+    await state.update_data(design_slot=slot)
+    await state.set_state(AdminFlow.design_emoji)
+    await cb.message.edit_text(
+        f"Отправьте эмодзи для кнопки <b>{slot}</b> (обычный эмодзи или custom-emoji ID):",
+        parse_mode="HTML",
+        reply_markup=cancel_keyboard(),
+    )
+    await cb.answer()
+
+
+@router.message(AdminFlow.design_emoji)
+async def on_design_emoji(message: Message, state: FSMContext) -> None:
+    value = (message.text or "").strip()
+    if not value:
+        await message.answer("Введите эмодзи или ID.", reply_markup=cancel_keyboard())
+        return
+    data = await state.get_data()
+    slot = data["design_slot"]
+    async with session_scope() as session:
+        design = await get_design(session)
+        design.setdefault("emoji", {})[slot] = value
+        await save_design(session, design)
+    await state.clear()
+    await message.answer(f"✅ Эмодзи для {slot} сохранён.", reply_markup=admin_menu())
+
+
+@router.callback_query(F.data == "admin:design:labels")
+async def cb_design_labels(cb: CallbackQuery) -> None:
+    async with session_scope() as session:
+        design = await get_design(session)
+    kb = InlineKeyboardBuilder()
+    for slot, _e, label_key, _c in BUTTON_SLOTS:
+        cur = (design.get("labels") or {}).get(slot) or label_key
+        kb.button(text=f"{slot}: {cur}", callback_data=f"admin:design:label:{slot}")
+    kb.button(text="🔙 Назад", callback_data="admin:design")
+    kb.adjust(1)
+    await cb.message.edit_text(
+        "🏷 Выберите кнопку для изменения текста:", reply_markup=kb.as_markup()
+    )
+    await cb.answer()
+
+
+@router.callback_query(F.data.startswith("admin:design:label:"))
+async def cb_design_label_slot(cb: CallbackQuery, state: FSMContext) -> None:
+    slot = cb.data.rsplit(":", 1)[1]
+    await state.update_data(design_slot=slot)
+    await state.set_state(AdminFlow.design_label)
+    await cb.message.edit_text(
+        f"Отправьте новый текст для кнопки <b>{slot}</b> (без эмодзи):",
+        parse_mode="HTML",
+        reply_markup=cancel_keyboard(),
+    )
+    await cb.answer()
+
+
+@router.message(AdminFlow.design_label)
+async def on_design_label(message: Message, state: FSMContext) -> None:
+    value = (message.text or "").strip()
+    if not value:
+        await message.answer("Введите текст.", reply_markup=cancel_keyboard())
+        return
+    data = await state.get_data()
+    slot = data["design_slot"]
+    async with session_scope() as session:
+        design = await get_design(session)
+        design.setdefault("labels", {})[slot] = value
+        await save_design(session, design)
+    await state.clear()
+    await message.answer(f"✅ Текст для {slot} сохранён.", reply_markup=admin_menu())
+
+
+@router.callback_query(F.data == "admin:design:buttons")
+async def cb_design_buttons(cb: CallbackQuery) -> None:
+    async with session_scope() as session:
+        design = await get_design(session)
+    kb = InlineKeyboardBuilder()
+    for i, btn in enumerate(design.get("buttons") or []):
+        kb.button(
+            text=f"🗑 {btn.get('label', '')}",
+            callback_data=f"admin:design:btn_del:{i}",
+        )
+    kb.button(text="➕ Добавить кнопку", callback_data="admin:design:btn_add")
+    kb.button(text="🔙 Назад", callback_data="admin:design")
+    kb.adjust(1)
+    await cb.message.edit_text(
+        "🔘 Кастомные кнопки (URL-ссылки):", reply_markup=kb.as_markup()
+    )
+    await cb.answer()
+
+
+@router.callback_query(F.data == "admin:design:btn_add")
+async def cb_design_btn_add(cb: CallbackQuery, state: FSMContext) -> None:
+    await state.set_state(AdminFlow.design_btn_label)
+    await cb.message.edit_text("Текст кнопки:", reply_markup=cancel_keyboard())
+    await cb.answer()
+
+
+@router.message(AdminFlow.design_btn_label)
+async def on_design_btn_label(message: Message, state: FSMContext) -> None:
+    label = (message.text or "").strip()
+    if not label:
+        await message.answer("Введите текст кнопки.", reply_markup=cancel_keyboard())
+        return
+    await state.update_data(design_btn_label=label)
+    await state.set_state(AdminFlow.design_btn_url)
+    await message.answer("Ссылка (URL):", reply_markup=cancel_keyboard())
+
+
+@router.message(AdminFlow.design_btn_url)
+async def on_design_btn_url(message: Message, state: FSMContext) -> None:
+    url = (message.text or "").strip()
+    if not url.startswith(("http://", "https://", "t.me/")):
+        await message.answer(
+            "Введите корректный URL (https://... или t.me/...).",
+            reply_markup=cancel_keyboard(),
+        )
+        return
+    data = await state.get_data()
+    async with session_scope() as session:
+        design = await get_design(session)
+        design.setdefault("buttons", []).append(
+            {"label": data["design_btn_label"], "url": url}
+        )
+        await save_design(session, design)
+    await state.clear()
+    await message.answer("✅ Кнопка добавлена.", reply_markup=admin_menu())
+
+
+@router.callback_query(F.data.startswith("admin:design:btn_del:"))
+async def cb_design_btn_del(cb: CallbackQuery) -> None:
+    idx = int(cb.data.rsplit(":", 1)[1])
+    async with session_scope() as session:
+        design = await get_design(session)
+        buttons = design.get("buttons") or []
+        if 0 <= idx < len(buttons):
+            buttons.pop(idx)
+            design["buttons"] = buttons
+            await save_design(session, design)
+    await cb.message.answer("✅ Кнопка удалена.")
+    await cb.answer()
+
+
+@router.callback_query(F.data == "admin:design:images")
+async def cb_design_images(cb: CallbackQuery) -> None:
+    async with session_scope() as session:
+        design = await get_design(session)
+    kb = InlineKeyboardBuilder()
+    for screen in SCREENS:
+        cur = (design.get("images") or {}).get(screen) or "—"
+        kb.button(text=f"{screen}: {cur[:25]}", callback_data=f"admin:design:img:{screen}")
+    kb.button(text="🔙 Назад", callback_data="admin:design")
+    kb.adjust(1)
+    await cb.message.edit_text(
+        "🖼 Картинки над экранами (URL или file_id фото).\n"
+        "Экраны: cabinet (профиль), balance, buy, subs.",
+        reply_markup=kb.as_markup(),
+    )
+    await cb.answer()
+
+
+@router.callback_query(F.data.startswith("admin:design:img:"))
+async def cb_design_img_slot(cb: CallbackQuery, state: FSMContext) -> None:
+    screen = cb.data.rsplit(":", 1)[1]
+    await state.update_data(design_screen=screen)
+    await state.set_state(AdminFlow.design_img)
+    await cb.message.edit_text(
+        f"Отправьте URL картинки или file_id для экрана <b>{screen}</b> "
+        "(или «удалить», чтобы убрать):",
+        parse_mode="HTML",
+        reply_markup=cancel_keyboard(),
+    )
+    await cb.answer()
+
+
+@router.message(AdminFlow.design_img)
+async def on_design_img(message: Message, state: FSMContext) -> None:
+    value = (message.text or "").strip()
+    data = await state.get_data()
+    screen = data["design_screen"]
+    async with session_scope() as session:
+        design = await get_design(session)
+        images = design.setdefault("images", {})
+        if value and value.lower() not in ("off", "удалить", "remove"):
+            images[screen] = value
+        else:
+            images.pop(screen, None)
+        await save_design(session, design)
+    await state.clear()
+    await message.answer(f"✅ Картинка для {screen} сохранена.", reply_markup=admin_menu())
 
 
 # ---------- вход из кабинета ----------

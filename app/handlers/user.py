@@ -13,12 +13,13 @@ from app.handlers.common import get_or_create_user
 from app.i18n import get_lang, tr
 from app.keyboards.inline import back_to_menu, cabinet_keyboard
 from app.services import referral as referral_service
+from app.services.design import get_design
 from app.utils import fmt_money
 
 router = Router()
 
 
-async def _render_cabinet(session, user) -> tuple[str, str]:
+async def _render_cabinet(session, user) -> tuple[str, str, dict]:
     lang = get_lang(user)
     active = (
         await session.execute(
@@ -39,16 +40,22 @@ async def _render_cabinet(session, user) -> tuple[str, str]:
             tr(lang, "cabinet_subs_count", count=active),
         ]
     )
-    return text, lang
+    design = await get_design(session)
+    return text, lang, design
 
 
-def _cabinet_kb(lang: str, user_id: int):
+def _cabinet_kb(lang: str, user_id: int, design: dict | None = None):
     return cabinet_keyboard(
         lang,
         is_admin=user_id in settings.admin_ids,
         channel_link=settings.channel_link,
         web_link=settings.web_link,
+        design=design,
     )
+
+
+def _image(design: dict, screen: str) -> str:
+    return (design.get("images") or {}).get(screen) or ""
 
 
 @router.message(CommandStart())
@@ -66,12 +73,12 @@ async def cmd_start(message: Message) -> None:
             referrer = await referral_service.find_by_referral_code(session, args)
             if referrer and referrer.telegram_id != user.telegram_id:
                 user.referred_by = referrer.telegram_id
-        text, lang = await _render_cabinet(session, user)
-        await message.answer(
-            text,
-            parse_mode="HTML",
-            reply_markup=_cabinet_kb(lang, message.from_user.id),
-        )
+        text, lang, design = await _render_cabinet(session, user)
+        kb = _cabinet_kb(lang, message.from_user.id, design)
+        image = _image(design, "cabinet")
+        if image:
+            await message.answer_photo(image)
+        await message.answer(text, parse_mode="HTML", reply_markup=kb)
 
 
 @router.callback_query(F.data == "menu")
@@ -83,10 +90,14 @@ async def cb_menu(cb: CallbackQuery) -> None:
             cb.from_user.username,
             cb.from_user.first_name,
         )
-        text, lang = await _render_cabinet(session, user)
-        await cb.message.edit_text(
-            text, parse_mode="HTML", reply_markup=_cabinet_kb(lang, cb.from_user.id)
-        )
+        text, lang, design = await _render_cabinet(session, user)
+        kb = _cabinet_kb(lang, cb.from_user.id, design)
+        image = _image(design, "cabinet")
+        if image:
+            await cb.message.answer_photo(image)
+            await cb.message.answer(text, parse_mode="HTML", reply_markup=kb)
+        else:
+            await cb.message.edit_text(text, parse_mode="HTML", reply_markup=kb)
     await cb.answer()
 
 
@@ -117,10 +128,14 @@ async def cb_lang(cb: CallbackQuery) -> None:
         )
         user.lang = "en" if get_lang(user) != "en" else "ru"
         lang = get_lang(user)
-        text, _ = await _render_cabinet(session, user)
-        await cb.message.edit_text(
-            text, parse_mode="HTML", reply_markup=_cabinet_kb(lang, cb.from_user.id)
-        )
+        text, _, design = await _render_cabinet(session, user)
+        kb = _cabinet_kb(lang, cb.from_user.id, design)
+        image = _image(design, "cabinet")
+        if image:
+            await cb.message.answer_photo(image)
+            await cb.message.answer(text, parse_mode="HTML", reply_markup=kb)
+        else:
+            await cb.message.edit_text(text, parse_mode="HTML", reply_markup=kb)
         await cb.answer(tr(lang, "lang_switched", lang=lang))
 
 
@@ -134,15 +149,20 @@ async def cb_balance(cb: CallbackQuery) -> None:
             cb.from_user.first_name,
         )
         lang = get_lang(user)
+        design = await get_design(session)
         text = tr(
             lang,
             "balance_title",
             balance=fmt_money(user.balance),
             percent=settings.referral_percent,
         )
-        await cb.message.edit_text(
-            text, parse_mode="HTML", reply_markup=back_to_menu(lang)
-        )
+        kb = back_to_menu(lang)
+        image = _image(design, "balance")
+        if image:
+            await cb.message.answer_photo(image)
+            await cb.message.answer(text, parse_mode="HTML", reply_markup=kb)
+        else:
+            await cb.message.edit_text(text, parse_mode="HTML", reply_markup=kb)
     await cb.answer()
 
 

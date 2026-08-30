@@ -22,6 +22,7 @@ from app.keyboards.inline import (
     promo_skip_keyboard,
 )
 from app.services import balance as balance_service
+from app.services.design import get_design
 from app.services.messaging import send_subscription_config
 from app.services.promo import (
     compute_discount,
@@ -88,6 +89,8 @@ async def cb_buy(cb: CallbackQuery, state: FSMContext) -> None:
             session, cb.from_user.id, cb.from_user.username
         )
         lang = get_lang(user)
+        design = await get_design(session)
+        image = (design.get("images") or {}).get("buy") or ""
         plans = (
             (
                 await session.execute(
@@ -100,15 +103,25 @@ async def cb_buy(cb: CallbackQuery, state: FSMContext) -> None:
             .all()
         )
         if not plans:
+            if image:
+                await cb.message.answer_photo(image)
             await cb.message.edit_text(
                 tr(lang, "buy_no_plans"), reply_markup=back_to_menu(lang)
             )
             await cb.answer()
             return
         await state.clear()
-        await cb.message.edit_text(
-            tr(lang, "buy_choose"), reply_markup=plans_keyboard(plans, lang)
-        )
+        if image:
+            await cb.message.answer_photo(image)
+            await cb.message.answer(
+                tr(lang, "buy_choose"),
+                parse_mode="HTML",
+                reply_markup=plans_keyboard(plans, lang),
+            )
+        else:
+            await cb.message.edit_text(
+                tr(lang, "buy_choose"), reply_markup=plans_keyboard(plans, lang)
+            )
     await cb.answer()
 
 

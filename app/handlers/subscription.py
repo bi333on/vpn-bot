@@ -19,6 +19,7 @@ from app.keyboards.inline import (
     subscription_actions,
 )
 from app.services.balance import spend_balance
+from app.services.design import get_design
 from app.services.messaging import send_subscription_config
 from app.services.qr import make_qr_png
 from app.services.subscription import (
@@ -51,6 +52,8 @@ async def cb_subs(cb: CallbackQuery) -> None:
             session, cb.from_user.id, cb.from_user.username
         )
         lang = get_lang(user)
+        design = await get_design(session)
+        image = (design.get("images") or {}).get("subs") or ""
         subs = (
             (
                 await session.execute(
@@ -63,6 +66,8 @@ async def cb_subs(cb: CallbackQuery) -> None:
             .all()
         )
         if not subs:
+            if image:
+                await cb.message.answer_photo(image)
             await cb.message.edit_text(
                 tr(lang, "subs_empty"), reply_markup=back_to_menu(lang)
             )
@@ -79,9 +84,15 @@ async def cb_subs(cb: CallbackQuery) -> None:
         text = tr(lang, "subs_title") + "\n\n" + "\n\n".join(
             _sub_detail(s, lang) for s in subs
         )
-        await cb.message.edit_text(
-            text, parse_mode="HTML", reply_markup=kb.as_markup()
-        )
+        if image:
+            await cb.message.answer_photo(image)
+            await cb.message.answer(
+                text, parse_mode="HTML", reply_markup=kb.as_markup()
+            )
+        else:
+            await cb.message.edit_text(
+                text, parse_mode="HTML", reply_markup=kb.as_markup()
+            )
     await cb.answer()
 
 
