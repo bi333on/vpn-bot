@@ -18,11 +18,21 @@ SessionFactory = async_sessionmaker(
 
 
 async def init_db() -> None:
-    """Создать все таблицы (idempotent)."""
+    """Создать все таблицы и применить легковесные миграции (idempotent)."""
     from app.db import models  # noqa: F401
 
     async with engine.begin() as conn:
         await conn.run_sync(models.Base.metadata.create_all)
+        await conn.run_sync(_migrate)
+
+
+def _migrate(sync_conn) -> None:
+    """Добавить колонки, которых нет в старых SQLite-БД."""
+    cols = {row[1] for row in sync_conn.exec_driver_sql("PRAGMA table_info(users)")}
+    if "first_name" not in cols:
+        sync_conn.exec_driver_sql(
+            "ALTER TABLE users ADD COLUMN first_name VARCHAR(255)"
+        )
 
 
 @asynccontextmanager

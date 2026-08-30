@@ -28,7 +28,7 @@ async def _render_cabinet(session, user) -> tuple[str, str]:
             )
         )
     ).scalar_one()
-    name = user.username or f"tg{user.telegram_id}"
+    name = user.first_name or user.username or f"tg{user.telegram_id}"
     text = "\n".join(
         [
             f"<b>{tr(lang, 'cabinet_title')}</b>",
@@ -57,7 +57,10 @@ async def cmd_start(message: Message) -> None:
     args = parts[1].strip() if len(parts) > 1 else ""
     async with session_scope() as session:
         user = await get_or_create_user(
-            session, message.from_user.id, message.from_user.username
+            session,
+            message.from_user.id,
+            message.from_user.username,
+            message.from_user.first_name,
         )
         if args and not user.referred_by:
             referrer = await referral_service.find_by_referral_code(session, args)
@@ -75,7 +78,10 @@ async def cmd_start(message: Message) -> None:
 async def cb_menu(cb: CallbackQuery) -> None:
     async with session_scope() as session:
         user = await get_or_create_user(
-            session, cb.from_user.id, cb.from_user.username
+            session,
+            cb.from_user.id,
+            cb.from_user.username,
+            cb.from_user.first_name,
         )
         text, lang = await _render_cabinet(session, user)
         await cb.message.edit_text(
@@ -88,7 +94,10 @@ async def cb_menu(cb: CallbackQuery) -> None:
 async def cmd_lang(message: Message) -> None:
     async with session_scope() as session:
         user = await get_or_create_user(
-            session, message.from_user.id, message.from_user.username
+            session,
+            message.from_user.id,
+            message.from_user.username,
+            message.from_user.first_name,
         )
         user.lang = "en" if get_lang(user) != "en" else "ru"
         lang = get_lang(user)
@@ -101,7 +110,10 @@ async def cmd_lang(message: Message) -> None:
 async def cb_lang(cb: CallbackQuery) -> None:
     async with session_scope() as session:
         user = await get_or_create_user(
-            session, cb.from_user.id, cb.from_user.username
+            session,
+            cb.from_user.id,
+            cb.from_user.username,
+            cb.from_user.first_name,
         )
         user.lang = "en" if get_lang(user) != "en" else "ru"
         lang = get_lang(user)
@@ -116,7 +128,10 @@ async def cb_lang(cb: CallbackQuery) -> None:
 async def cb_balance(cb: CallbackQuery) -> None:
     async with session_scope() as session:
         user = await get_or_create_user(
-            session, cb.from_user.id, cb.from_user.username
+            session,
+            cb.from_user.id,
+            cb.from_user.username,
+            cb.from_user.first_name,
         )
         lang = get_lang(user)
         text = tr(
@@ -135,7 +150,10 @@ async def cb_balance(cb: CallbackQuery) -> None:
 async def cb_referral(cb: CallbackQuery) -> None:
     async with session_scope() as session:
         user = await get_or_create_user(
-            session, cb.from_user.id, cb.from_user.username
+            session,
+            cb.from_user.id,
+            cb.from_user.username,
+            cb.from_user.first_name,
         )
         lang = get_lang(user)
         code = await referral_service.ensure_referral_code(session, user)
@@ -158,7 +176,10 @@ async def cb_referral(cb: CallbackQuery) -> None:
 async def cb_about(cb: CallbackQuery) -> None:
     async with session_scope() as session:
         user = await get_or_create_user(
-            session, cb.from_user.id, cb.from_user.username
+            session,
+            cb.from_user.id,
+            cb.from_user.username,
+            cb.from_user.first_name,
         )
         lang = get_lang(user)
         await cb.message.edit_text(
@@ -173,7 +194,10 @@ async def cb_about(cb: CallbackQuery) -> None:
 async def cb_gift(cb: CallbackQuery) -> None:
     async with session_scope() as session:
         user = await get_or_create_user(
-            session, cb.from_user.id, cb.from_user.username
+            session,
+            cb.from_user.id,
+            cb.from_user.username,
+            cb.from_user.first_name,
         )
         lang = get_lang(user)
         await cb.message.edit_text(

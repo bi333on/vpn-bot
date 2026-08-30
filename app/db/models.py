@@ -31,6 +31,7 @@ class User(Base):
     id: Mapped[int] = mapped_column(primary_key=True)
     telegram_id: Mapped[int] = mapped_column(BigInteger, unique=True, index=True)
     username: Mapped[Optional[str]] = mapped_column(String(255), nullable=True)
+    first_name: Mapped[Optional[str]] = mapped_column(String(255), nullable=True)
     balance: Mapped[int] = mapped_column(Integer, default=0)  # в копейках/центах
     referral_code: Mapped[Optional[str]] = mapped_column(
         String(32), unique=True, nullable=True
