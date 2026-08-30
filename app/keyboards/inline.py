@@ -30,7 +30,7 @@ def cabinet_keyboard(
     web_link: str = "",
     design: dict | None = None,
 ) -> InlineKeyboardMarkup:
-    from app.services.design import BUTTON_SLOTS, button_label
+    from app.services.design import BUTTON_SLOTS, button_label, get_columns
 
     design = design or {}
     b = InlineKeyboardBuilder()
@@ -46,7 +46,7 @@ def cabinet_keyboard(
         b.button(text=tr(lang, "cabinet_channel"), url=channel_link)
     if web_link:
         b.button(text=tr(lang, "cabinet_web"), url=web_link)
-    b.adjust(1)
+    b.adjust(get_columns(design))
     return b.as_markup()
 
 

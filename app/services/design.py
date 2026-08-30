@@ -32,7 +32,7 @@ SCREENS = ["cabinet", "balance", "buy", "subs"]
 
 
 def default_design() -> dict:
-    return {"emoji": {}, "labels": {}, "buttons": [], "images": {}}
+    return {"emoji": {}, "labels": {}, "buttons": [], "images": {}, "columns": 1}
 
 
 async def get_design(session) -> dict:
@@ -46,6 +46,15 @@ async def get_design(session) -> dict:
 
 async def save_design(session, design: dict) -> None:
     await set_setting(session, DESIGN_KEY, design)
+
+
+def get_columns(design: dict) -> int:
+    """Кол-во колонок для кнопок кабинета (1 или 2)."""
+    try:
+        n = int(design.get("columns") or 1)
+    except (TypeError, ValueError):
+        n = 1
+    return n if n in (1, 2) else 1
 
 
 def button_label(slot: str, lang: str, design: dict) -> tuple[str, str]:

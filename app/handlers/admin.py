@@ -18,6 +18,7 @@ from app.services.balance import add_balance
 from app.services.design import (
     BUTTON_SLOTS,
     SCREENS,
+    get_columns,
     get_design,
     save_design,
     slot_emoji,
@@ -658,11 +659,15 @@ async def on_remnawave_node(message: Message, state: FSMContext) -> None:
 # ---------- дизайн ----------
 @router.callback_query(F.data == "admin:design")
 async def cb_design(cb: CallbackQuery) -> None:
+    async with session_scope() as session:
+        design = await get_design(session)
+    cols = get_columns(design)
     kb = InlineKeyboardBuilder()
     kb.button(text="😊 Эмодзи кнопок", callback_data="admin:design:emoji")
     kb.button(text="🏷 Тексты кнопок", callback_data="admin:design:labels")
     kb.button(text="🔘 Конструктор кнопок", callback_data="admin:design:buttons")
     kb.button(text="🖼 Картинки", callback_data="admin:design:images")
+    kb.button(text=f"🧱 Колонки кнопок: {cols}", callback_data="admin:design:columns")
     kb.button(text="📋 Шпаргалка Callback", callback_data="admin:design:help")
     kb.button(text="🔙 Назад", callback_data="admin:back")
     kb.adjust(1)
@@ -670,6 +675,36 @@ async def cb_design(cb: CallbackQuery) -> None:
         "🎨 <b>Дизайн</b>", parse_mode="HTML", reply_markup=kb.as_markup()
     )
     await cb.answer()
+
+
+@router.callback_query(F.data == "admin:design:columns")
+async def cb_design_columns(cb: CallbackQuery) -> None:
+    async with session_scope() as session:
+        design = await get_design(session)
+    cols = get_columns(design)
+    kb = InlineKeyboardBuilder()
+    for n in (1, 2):
+        mark = " ✅" if cols == n else ""
+        suffix = "колонка" if n == 1 else "колонки"
+        kb.button(text=f"{n} {suffix}{mark}", callback_data=f"admin:design:cols:{n}")
+    kb.button(text="🔙 Назад", callback_data="admin:design")
+    kb.adjust(1)
+    await cb.message.edit_text(
+        "🧱 Выберите количество колонок для кнопок кабинета.\n"
+        "Действует и на кнопки из конструктора.",
+        reply_markup=kb.as_markup(),
+    )
+    await cb.answer()
+
+
+@router.callback_query(F.data.startswith("admin:design:cols:"))
+async def cb_design_columns_set(cb: CallbackQuery) -> None:
+    n = int(cb.data.rsplit(":", 1)[1])
+    async with session_scope() as session:
+        design = await get_design(session)
+        design["columns"] = n if n in (1, 2) else 1
+        await save_design(session, design)
+    await cb_design_columns(cb)
 
 
 @router.callback_query(F.data == "admin:design:help")
