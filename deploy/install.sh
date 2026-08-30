@@ -1,23 +1,21 @@
 #!/usr/bin/env bash
 # Установка VPN-бота на Ubuntu 22.04/24.04 (Docker + Caddy).
 #
-# Базовый запуск:
-#   DOMAIN=bot.example.com ./deploy/install.sh
-#
-# Полностью одной командой (секреты через env, сразу запустить бота):
+# Одна команда (все параметры через env, сразу запустить):
 #   DOMAIN=bot.example.com \
 #   BOT_TOKEN='...' ADMIN_IDS='...' \
-#   REMNAWAVE_API_URL='https://...' REMNAWAVE_USERNAME='...' REMNAWAVE_PASSWORD='...' \
-#   DEPLOY=1 ./deploy/install.sh
+#   REMNAWAVE_API_URL='https://...' REMNAWAVE_API_TOKEN='...' \
+#   DEPLOY=1 bash /tmp/vpn-install.sh
 set -euo pipefail
 
 DOMAIN="${DOMAIN:-}"
 if [ -z "$DOMAIN" ]; then
-  echo "Usage: DOMAIN=bot.example.com ./deploy/install.sh" >&2
+  echo "Usage: DOMAIN=bot.example.com ./install.sh" >&2
   exit 1
 fi
 
 APP_DIR="/opt/vpn-bot"
+ENV_FILE="$APP_DIR/.env"
 
 echo "==> [1/6] Docker"
 if ! command -v docker >/dev/null 2>&1; then
@@ -44,35 +42,43 @@ if [ ! -d "$APP_DIR" ]; then
   sudo mkdir -p "$APP_DIR"
   sudo chown "$USER" "$APP_DIR"
   git clone https://github.com/bi333on/vpn-bot.git "$APP_DIR"
+else
+  (cd "$APP_DIR" && git pull --ff-only) || true
 fi
 
-echo "==> [4/6] .env"
-[ ! -f "$APP_DIR/.env" ] && cp "$APP_DIR/.env.example" "$APP_DIR/.env"
+# --- .env: создать из шаблона, затем перезаписать значения из env ---
+[ ! -f "$ENV_FILE" ] && cp "$APP_DIR/.env.example" "$ENV_FILE"
 
 set_env() {
   local key="$1" value="$2"
-  if grep -q "^${key}=" "$APP_DIR/.env"; then
-    sed -i "s|^${key}=.*|${key}=${value}|" "$APP_DIR/.env"
-  else
-    echo "${key}=${value}" >> "$APP_DIR/.env"
-  fi
+  grep -v "^${key}=" "$ENV_FILE" > "$ENV_FILE.tmp" || true
+  printf '%s=%s\n' "$key" "$value" >> "$ENV_FILE.tmp"
+  mv "$ENV_FILE.tmp" "$ENV_FILE"
 }
 
+echo "==> [4/6] .env"
 set_env "WEBHOOK_HOST" "https://$DOMAIN"
 set_env "WEBHOOK_PATH" "/telegram"
 set_env "POLLING_MODE" "false"
 set_env "DATABASE_URL" "sqlite+aiosqlite:///data/bot.db"
 
-[ -n "${BOT_TOKEN:-}" ] && set_env "BOT_TOKEN" "$BOT_TOKEN"
-[ -n "${ADMIN_IDS:-}" ] && set_env "ADMIN_IDS" "$ADMIN_IDS"
-[ -n "${REMNAWAVE_API_URL:-}" ] && set_env "REMNAWAVE_API_URL" "$REMNAWAVE_API_URL"
-[ -n "${REMNAWAVE_API_TOKEN:-}" ] && set_env "REMNAWAVE_API_TOKEN" "$REMNAWAVE_API_TOKEN"
-[ -n "${REMNAWAVE_NODE_UUID:-}" ] && set_env "REMNAWAVE_NODE_UUID" "$REMNAWAVE_NODE_UUID"
-[ -n "${REMNAWAVE_SUB_URL:-}" ] && set_env "REMNAWAVE_SUB_URL" "$REMNAWAVE_SUB_URL"
-[ -n "${REMNAWAVE_USERNAME:-}" ] && set_env "REMNAWAVE_USERNAME" "$REMNAWAVE_USERNAME"
-[ -n "${REMNAWAVE_PASSWORD:-}" ] && set_env "REMNAWAVE_PASSWORD" "$REMNAWAVE_PASSWORD"
+for var in \
+  BOT_TOKEN ADMIN_IDS \
+  REMNAWAVE_API_URL REMNAWAVE_API_TOKEN REMNAWAVE_NODE_UUID REMNAWAVE_NODE_FIELD \
+  REMNAWAVE_SUB_URL REMNAWAVE_USERNAME REMNAWAVE_PASSWORD REMNAWAVE_INBOUND_TAG \
+  YOOKASSA_SHOP_ID YOOKASSA_SECRET_KEY CRYPTOBOT_API_TOKEN ROLLYPAY_API_KEY; do
+  val="${!var:-}"
+  if [ -n "$val" ]; then
+    set_env "$var" "$val"
+  fi
+done
 
-set_env "WEBHOOK_SECRET_TOKEN" "${WEBHOOK_SECRET_TOKEN:-$(openssl rand -hex 24)}"
+# Секрет вебхука Telegram: генерируем, если не задан.
+if [ -n "${WEBHOOK_SECRET_TOKEN:-}" ]; then
+  set_env "WEBHOOK_SECRET_TOKEN" "$WEBHOOK_SECRET_TOKEN"
+else
+  set_env "WEBHOOK_SECRET_TOKEN" "$(openssl rand -hex 24)"
+fi
 
 echo "==> [5/6] Caddyfile"
 CADDYFILE="/etc/caddy/Caddyfile"
@@ -97,6 +103,6 @@ if [ "${DEPLOY:-0}" = "1" ]; then
   echo ""
   echo "    Готово. Проверка: curl -s https://$DOMAIN/health   # {\"status\":\"ok\"}"
 else
-  echo "    Секреты не переданы или DEPLOY не установлен."
-  echo "    Запустите: cd $APP_DIR && docker compose up -d --build"
+  echo "    DEPLOY не установлен. Запустите:"
+  echo "      cd $APP_DIR && docker compose up -d --build"
 fi

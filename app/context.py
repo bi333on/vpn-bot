@@ -19,6 +19,7 @@ def get_remnawave() -> RemnawaveClient:
             settings.sub_url,
             settings.remnawave_api_token or None,
             settings.remnawave_node_uuid or None,
+            settings.remnawave_node_field or "nodeUuid",
         )
     return _remnawave
 

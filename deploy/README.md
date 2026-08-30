@@ -50,7 +50,10 @@ WEBHOOK_PATH=/telegram
 WEBHOOK_SECRET_TOKEN=случайная-длинная-строка  # секрет для вебхука Telegram
 
 REMNAWAVE_API_URL=https://panel.example.com
-REMNAWAVE_USERNAME=admin
+REMNAWAVE_API_TOKEN=            # основной способ: Bearer-токен (можно задать и из админки бота)
+REMNAWAVE_NODE_UUID=            # (опц.) UUID ноды, на которой выдавать пользователей
+REMNAWAVE_NODE_FIELD=nodeUuid   # (опц.) имя поля ноды в POST /api/users
+REMNAWAVE_USERNAME=admin        # fallback, если токен не задан
 REMNAWAVE_PASSWORD=пароль
 REMNAWAVE_SUB_URL=https://panel.example.com
 REMNAWAVE_INBOUND_TAG=          # тег reality-inbound (опционально)

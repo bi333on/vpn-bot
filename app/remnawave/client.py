@@ -35,6 +35,7 @@ class RemnawaveClient:
         sub_url: str | None = None,
         api_token: str | None = None,
         node_uuid: str | None = None,
+        node_field: str = "nodeUuid",
     ) -> None:
         self.base_url = base_url.rstrip("/")
         self.sub_url = (sub_url or self.base_url).rstrip("/")
@@ -42,6 +43,7 @@ class RemnawaveClient:
         self.password = password
         self.api_token = api_token or None
         self.node_uuid = node_uuid or None
+        self.node_field = node_field or "nodeUuid"
         self._token: str | None = None
         self._http = httpx.AsyncClient(timeout=httpx.Timeout(30.0))
 
@@ -150,7 +152,7 @@ class RemnawaveClient:
         }
         target_node = node_uuid or self.node_uuid
         if target_node:
-            payload["nodeUuid"] = target_node
+            payload[self.node_field] = target_node
         return await self._request("POST", "/api/users", json=payload)
 
     async def get_user(self, short_uuid: str) -> dict:

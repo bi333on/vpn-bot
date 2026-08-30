@@ -4,8 +4,6 @@ from __future__ import annotations
 import secrets
 import string
 
-from app.config import settings
-
 
 def fmt_money(kopecks: int) -> str:
     """Отформатировать сумму в копейках/центах (RUB)."""
@@ -31,3 +29,8 @@ def fmt_bytes(num_bytes: int) -> str:
 def generate_referral_code() -> str:
     alphabet = string.ascii_uppercase + string.digits
     return "".join(secrets.choice(alphabet) for _ in range(10))
+
+
+def tg_emoji(emoji_id: str, fallback: str) -> str:
+    """HTML-тег кастомной эмодзи Telegram (<tg-emoji>)."""
+    return f'<tg-emoji emoji-id="{emoji_id}">{fallback}</tg-emoji>'

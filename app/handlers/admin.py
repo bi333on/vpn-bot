@@ -466,13 +466,16 @@ async def cb_broadcast(cb: CallbackQuery, state: FSMContext) -> None:
 
 @router.message(AdminFlow.broadcast_text)
 async def broadcast_text(message: Message, state: FSMContext) -> None:
-    text = message.text or ""
+    # html_text сохраняет сущности, включая кастомные эмодзи (<tg-emoji>).
+    text = message.html_text or message.text or ""
     async with session_scope() as session:
         users = (await session.execute(select(User))).scalars().all()
     sent = 0
     for u in users:
         try:
-            await message.bot.send_message(u.telegram_id, text)
+            await message.bot.send_message(
+                u.telegram_id, text, parse_mode="HTML"
+            )
             sent += 1
         except Exception:  # noqa: BLE001
             continue
