@@ -38,7 +38,7 @@ SLOT_MAP: dict = {
 
 
 def default_design() -> dict:
-    return {"emoji": {}, "labels": {}, "buttons": [], "images": {}, "columns": 1, "order": []}
+    return {"emoji": {}, "labels": {}, "buttons": [], "images": {}, "columns": 1, "order": [], "row_sizes": {}}
 
 
 async def get_design(session) -> dict:
@@ -55,12 +55,36 @@ async def save_design(session, design: dict) -> None:
 
 
 def get_columns(design: dict) -> int:
-    """Кол-во колонок для кнопок кабинета (1 или 2)."""
+    """Кол-во колонок по умолчанию (1 или 2)."""
     try:
         n = int(design.get("columns") or 1)
     except (TypeError, ValueError):
         n = 1
     return n if n in (1, 2) else 1
+
+
+def default_row_size(design: dict) -> int:
+    """Размер ряда по умолчанию (из настройки колонок): 1 или 2."""
+    return get_columns(design)
+
+
+def get_row_size(design: dict, slot: str) -> int:
+    """Размер ряда для слота: 1 — вся строка, 2 — полстроки (две в ряд)."""
+    sizes = design.get("row_sizes") or {}
+    if slot in sizes:
+        try:
+            n = int(sizes[slot])
+        except (TypeError, ValueError):
+            n = default_row_size(design)
+    else:
+        n = default_row_size(design)
+    return 1 if n == 1 else 2
+
+
+def toggle_row_size(design: dict, slot: str) -> None:
+    """Переключить размер ряда слота между 1 и 2."""
+    sizes = design.setdefault("row_sizes", {})
+    sizes[slot] = 1 if get_row_size(design, slot) == 2 else 2
 
 
 def get_order(design: dict) -> list:

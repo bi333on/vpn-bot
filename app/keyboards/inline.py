@@ -30,23 +30,56 @@ def cabinet_keyboard(
     web_link: str = "",
     design: dict | None = None,
 ) -> InlineKeyboardMarkup:
-    from app.services.design import button_label, get_columns, get_order
+    from aiogram.types import InlineKeyboardButton
+
+    from app.services.design import (
+        button_label,
+        default_row_size,
+        get_order,
+        get_row_size,
+    )
 
     design = design or {}
-    b = InlineKeyboardBuilder()
+
+    def _btn(text: str, callback: str | None = None, url: str | None = None):
+        if url:
+            return InlineKeyboardButton(text=text, url=url)
+        return InlineKeyboardButton(text=text, callback_data=callback)
+
+    items = []
     for slot in get_order(design):
         if slot == "admin" and not is_admin:
             continue
         text, callback = button_label(slot, lang, design)
-        b.button(text=text, callback_data=callback)
+        items.append((_btn(text, callback=callback), get_row_size(design, slot)))
     for btn in design.get("buttons") or []:
         if btn.get("url"):
-            b.button(text=btn.get("label", ""), url=btn["url"])
+            size = int(btn.get("size") or default_row_size(design))
+            items.append((_btn(btn.get("label", ""), url=btn["url"]), size))
     if channel_link:
-        b.button(text=tr(lang, "cabinet_channel"), url=channel_link)
+        items.append(
+            (_btn(tr(lang, "cabinet_channel"), url=channel_link), default_row_size(design))
+        )
     if web_link:
-        b.button(text=tr(lang, "cabinet_web"), url=web_link)
-    b.adjust(get_columns(design))
+        items.append(
+            (_btn(tr(lang, "cabinet_web"), url=web_link), default_row_size(design))
+        )
+
+    b = InlineKeyboardBuilder()
+    pending = []
+    for btn, size in items:
+        if size == 1:
+            if pending:
+                b.row(*pending)
+                pending = []
+            b.row(btn)
+        else:
+            pending.append(btn)
+            if len(pending) == 2:
+                b.row(*pending)
+                pending = []
+    if pending:
+        b.row(*pending)
     return b.as_markup()
 
 
