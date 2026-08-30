@@ -19,6 +19,9 @@ fi
 
 APP_DIR="/opt/vpn-bot"
 ENV_FILE="$APP_DIR/.env"
+# Для приватного репозитория можно указать SSH-ссылку:
+#   REPO_URL=git@github.com:bi333on/vpn-bot.git
+REPO_URL="${REPO_URL:-https://github.com/bi333on/vpn-bot.git}"
 
 echo "==> [1/6] Docker"
 if ! command -v docker >/dev/null 2>&1; then
@@ -44,7 +47,7 @@ echo "==> [3/6] Код"
 if [ ! -d "$APP_DIR" ]; then
   sudo mkdir -p "$APP_DIR"
   sudo chown "$USER" "$APP_DIR"
-  git clone https://github.com/bi333on/vpn-bot.git "$APP_DIR"
+  git clone "$REPO_URL" "$APP_DIR"
 else
   (cd "$APP_DIR" && git pull --ff-only) || true
 fi
