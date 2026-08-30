@@ -4,6 +4,8 @@
 """
 from __future__ import annotations
 
+from app.services.emoji import apply_custom_emojis
+
 DEFAULT_LANG = "ru"
 SUPPORTED_LANGS = ("ru", "en")
 
@@ -219,7 +221,7 @@ def tr(lang: str | None, key: str, **kwargs) -> str:
             text = text.format(**kwargs)
         except (KeyError, IndexError):
             pass
-    return text
+    return apply_custom_emojis(text)
 
 
 def get_lang(user) -> str:

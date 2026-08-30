@@ -22,6 +22,7 @@ from app.services.design import (
     save_design,
     slot_emoji,
 )
+from app.services.emoji import extract_custom_emoji, remember_emoji
 from app.services.git_update import (
     check_updates,
     current_commit,
@@ -678,6 +679,11 @@ async def cb_design_help(cb: CallbackQuery) -> None:
         lines.append(f"{emoji} — <code>{callback}</code>")
     lines.append("")
     lines.append("Кастомные кнопки из конструктора — это URL-ссылки.")
+    lines.append("")
+    lines.append("🎨 <b>Кастомные эмодзи в текстах</b>")
+    lines.append("Отправьте боту кастомное эмодзи — бот запомнит его ID.")
+    lines.append("В текстах вставляйте: <code>{{emoji:ID}}</code>")
+    lines.append("Например: <code>{{emoji:5399303572037387931}}</code>")
     kb = InlineKeyboardBuilder()
     kb.button(text="🔙 Назад", callback_data="admin:design")
     await cb.message.edit_text(
@@ -708,8 +714,10 @@ async def cb_design_emoji_slot(cb: CallbackQuery, state: FSMContext) -> None:
     await state.update_data(design_slot=slot)
     await state.set_state(AdminFlow.design_emoji)
     await cb.message.edit_text(
-        f"Отправьте эмодзи для кнопки <b>{slot}</b>.\n"
-        "Используйте обычный эмодзи (например 🚀) — в кнопках кастомные эмодзи не отображаются.",
+        f"Отправьте эмодзи для кнопки <b>{slot}</b>.\n\n"
+        "Обычный эмодзи (🚀) — встанет в кнопку как есть.\n"
+        "Кастомное эмодзи (премиум) — бот запомнит его ID для текстов, "
+        "а в кнопке покажет обычную версию.",
         parse_mode="HTML",
         reply_markup=cancel_keyboard(),
     )
@@ -719,8 +727,12 @@ async def cb_design_emoji_slot(cb: CallbackQuery, state: FSMContext) -> None:
 @router.message(AdminFlow.design_emoji)
 async def on_design_emoji(message: Message, state: FSMContext) -> None:
     value = (message.text or "").strip()
+    emoji_id, emoji_char = extract_custom_emoji(message)
+    if emoji_id:
+        # В кнопке показываем обычную версию (Telegram не рендерит custom в кнопках).
+        value = emoji_char or value
     if not value:
-        await message.answer("Введите эмодзи или ID.", reply_markup=cancel_keyboard())
+        await message.answer("Введите эмодзи.", reply_markup=cancel_keyboard())
         return
     data = await state.get_data()
     slot = data["design_slot"]
@@ -728,8 +740,21 @@ async def on_design_emoji(message: Message, state: FSMContext) -> None:
         design = await get_design(session)
         design.setdefault("emoji", {})[slot] = value
         await save_design(session, design)
+        if emoji_id:
+            await remember_emoji(session, emoji_id, emoji_char)
     await state.clear()
-    await message.answer(f"✅ Эмодзи для {slot} сохранён.", reply_markup=admin_menu())
+    if emoji_id:
+        await message.answer(
+            f"✅ Эмодзи для {slot} сохранён (в кнопке — обычная версия).\n\n"
+            f"ID кастомного эмодзи: <code>{emoji_id}</code>\n"
+            f"В текстах вставляйте: <code>{{{{emoji:{emoji_id}}}}}</code>",
+            parse_mode="HTML",
+            reply_markup=admin_menu(),
+        )
+    else:
+        await message.answer(
+            f"✅ Эмодзи для {slot} сохранён.", reply_markup=admin_menu()
+        )
 
 
 @router.callback_query(F.data == "admin:design:labels")

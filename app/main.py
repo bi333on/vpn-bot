@@ -20,6 +20,7 @@ from app.scheduler.jobs import start_scheduler
 from app.services.git_update import notify_update_complete
 from app.services.messaging import send_subscription_config
 from app.services.payment_flow import finalize_payment
+from app.services.emoji import load_emoji_map
 from app.services.remnawave_config import load_remnawave_settings
 
 logging.basicConfig(level=logging.INFO)
@@ -90,6 +91,7 @@ async def run_polling() -> None:
     bot = build_bot()
     dp = build_dispatcher()
     await init_db()
+    await load_emoji_map()
     await load_remnawave_settings()
     await notify_update_complete(bot)
     start_scheduler(bot)
@@ -105,6 +107,7 @@ async def run_webhook() -> None:
     bot = build_bot()
     dp = build_dispatcher()
     await init_db()
+    await load_emoji_map()
     await load_remnawave_settings()
     await notify_update_complete(bot)
 
