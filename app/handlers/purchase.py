@@ -16,6 +16,7 @@ from app.db.models import Payment, Plan
 from app.handlers.common import get_or_create_user
 from app.i18n import get_lang, tr
 from app.keyboards.inline import (
+    back_to_menu,
     payment_keyboard,
     plans_keyboard,
     promo_skip_keyboard,
@@ -99,7 +100,9 @@ async def cb_buy(cb: CallbackQuery, state: FSMContext) -> None:
             .all()
         )
         if not plans:
-            await cb.message.edit_text(tr(lang, "buy_no_plans"))
+            await cb.message.edit_text(
+                tr(lang, "buy_no_plans"), reply_markup=back_to_menu(lang)
+            )
             await cb.answer()
             return
         await state.clear()
