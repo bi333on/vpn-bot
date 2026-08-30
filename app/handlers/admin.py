@@ -15,6 +15,12 @@ from app.db.engine import session_scope
 from app.db.models import Payment, Plan, PromoCode, Subscription, User
 from app.keyboards.inline import admin_menu
 from app.services.balance import add_balance
+from app.services.remnawave_config import (
+    get_remnawave_api_token,
+    get_remnawave_node_uuid,
+    set_remnawave_api_token,
+    set_remnawave_node_uuid,
+)
 from app.services.subscription import set_device_limit
 from app.utils import fmt_money
 
@@ -42,6 +48,9 @@ class AdminFlow(StatesGroup):
 
     devices_user = State()
     devices_limit = State()
+
+    remnawave_token = State()
+    remnawave_node = State()
 
     broadcast_text = State()
 
@@ -471,6 +480,61 @@ async def broadcast_text(message: Message, state: FSMContext) -> None:
     await message.answer(
         f"✅ Рассылка завершена: доставлено {sent} из {len(users)}.",
         reply_markup=admin_menu(),
+    )
+
+
+# ---------- Remnawave API-токен ----------
+@router.callback_query(F.data == "admin:rwkey")
+async def cb_rwkey(cb: CallbackQuery, state: FSMContext) -> None:
+    async with session_scope() as session:
+        token = await get_remnawave_api_token(session)
+    masked = (token[:6] + "…") if token else "—"
+    await state.set_state(AdminFlow.remnawave_token)
+    await cb.message.edit_text(
+        f"🔑 Текущий API-токен Remnawave: {masked}\n\n"
+        "Отправьте новый токен (или /cancel):"
+    )
+    await cb.answer()
+
+
+@router.message(AdminFlow.remnawave_token)
+async def on_remnawave_token(message: Message, state: FSMContext) -> None:
+    token = (message.text or "").strip()
+    if not token:
+        await message.answer("Введите токен.")
+        return
+    async with session_scope() as session:
+        await set_remnawave_api_token(session, token)
+    get_remnawave().set_api_token(token)
+    await state.clear()
+    await message.answer(
+        "✅ API-токен Remnawave сохранён.", reply_markup=admin_menu()
+    )
+
+
+# ---------- Remnawave нода (UUID) ----------
+@router.callback_query(F.data == "admin:rwnode")
+async def cb_rwnode(cb: CallbackQuery, state: FSMContext) -> None:
+    async with session_scope() as session:
+        node_uuid = await get_remnawave_node_uuid(session)
+    await state.set_state(AdminFlow.remnawave_node)
+    await cb.message.edit_text(
+        f"🖧 Текущая нода Remnawave: {node_uuid or '—'}\n\n"
+        "Отправьте UUID ноды (XRay-node), на которой выдавать пользователей "
+        "(пустая строка — все ноды; /cancel — отмена):"
+    )
+    await cb.answer()
+
+
+@router.message(AdminFlow.remnawave_node)
+async def on_remnawave_node(message: Message, state: FSMContext) -> None:
+    node_uuid = (message.text or "").strip()
+    async with session_scope() as session:
+        await set_remnawave_node_uuid(session, node_uuid)
+    get_remnawave().set_node_uuid(node_uuid or None)
+    await state.clear()
+    await message.answer(
+        "✅ Нода Remnawave сохранена.", reply_markup=admin_menu()
     )
 
 

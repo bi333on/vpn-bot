@@ -34,7 +34,10 @@ async def build_config_link(
         pass
     inbounds = await client.get_inbounds()
     hosts = await client.get_hosts()
-    conn = resolve_connection(inbounds, hosts, settings.remnawave_inbound_tag)
+    node_uuid = getattr(client, "node_uuid", "") or ""
+    conn = resolve_connection(
+        inbounds, hosts, settings.remnawave_inbound_tag, node_uuid
+    )
     return build_vless(
         user_uuid,
         conn["address"],

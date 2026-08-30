@@ -19,6 +19,7 @@ from app.handlers import register_handlers
 from app.scheduler.jobs import start_scheduler
 from app.services.messaging import send_subscription_config
 from app.services.payment_flow import finalize_payment
+from app.services.remnawave_config import load_remnawave_settings
 
 logging.basicConfig(level=logging.INFO)
 logger = logging.getLogger(__name__)
@@ -88,6 +89,7 @@ async def run_polling() -> None:
     bot = build_bot()
     dp = build_dispatcher()
     await init_db()
+    await load_remnawave_settings()
     start_scheduler(bot)
     try:
         await dp.start_polling(bot, drop_pending_updates=True)
@@ -101,6 +103,7 @@ async def run_webhook() -> None:
     bot = build_bot()
     dp = build_dispatcher()
     await init_db()
+    await load_remnawave_settings()
 
     app = web.Application()
     app["bot"] = bot

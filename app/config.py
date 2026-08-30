@@ -38,6 +38,8 @@ class Settings(BaseSettings):
     remnawave_sub_url: str = Field(default="", alias="REMNAWAVE_SUB_URL")
     remnawave_username: str = Field(default="", alias="REMNAWAVE_USERNAME")
     remnawave_password: str = Field(default="", alias="REMNAWAVE_PASSWORD")
+    remnawave_api_token: str = Field(default="", alias="REMNAWAVE_API_TOKEN")
+    remnawave_node_uuid: str = Field(default="", alias="REMNAWAVE_NODE_UUID")
     remnawave_inbound_tag: str = Field(default="", alias="REMNAWAVE_INBOUND_TAG")
 
     # --- Деньги / рефералка ---

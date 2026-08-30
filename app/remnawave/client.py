@@ -33,13 +33,25 @@ class RemnawaveClient:
         username: str,
         password: str,
         sub_url: str | None = None,
+        api_token: str | None = None,
+        node_uuid: str | None = None,
     ) -> None:
         self.base_url = base_url.rstrip("/")
         self.sub_url = (sub_url or self.base_url).rstrip("/")
         self.username = username
         self.password = password
+        self.api_token = api_token or None
+        self.node_uuid = node_uuid or None
         self._token: str | None = None
         self._http = httpx.AsyncClient(timeout=httpx.Timeout(30.0))
+
+    def set_api_token(self, token: str | None) -> None:
+        """Задать/сбросить статический API-токен (из админки)."""
+        self.api_token = token or None
+
+    def set_node_uuid(self, node_uuid: str | None) -> None:
+        """Задать/сбросить UUID ноды, на которой выдавать пользователей."""
+        self.node_uuid = node_uuid or None
 
     async def close(self) -> None:
         await self._http.aclose()
@@ -64,6 +76,8 @@ class RemnawaveClient:
         return self._token
 
     async def _headers(self) -> dict:
+        if self.api_token:
+            return {"Authorization": f"Bearer {self.api_token}"}
         if not self._token:
             await self.login()
         return {"Authorization": f"Bearer {self._token}"}
@@ -80,7 +94,7 @@ class RemnawaveClient:
         resp = await self._http.request(
             method, f"{self.base_url}{path}", headers=headers, json=json
         )
-        if resp.status_code == 401 and retry:
+        if resp.status_code == 401 and retry and not self.api_token:
             await self.login()
             return await self._request(method, path, json=json, retry=False)
         if resp.status_code >= 400:
@@ -121,6 +135,7 @@ class RemnawaveClient:
         email: str | None = None,
         username: str | None = None,
         short_uuid: str | None = None,
+        node_uuid: str | None = None,
     ) -> dict:
         short_uuid = short_uuid or secrets.token_hex(4)
         payload = {
@@ -133,6 +148,9 @@ class RemnawaveClient:
             "hwidDeviceLimit": int(devices_limit),
             "status": "ACTIVE",
         }
+        target_node = node_uuid or self.node_uuid
+        if target_node:
+            payload["nodeUuid"] = target_node
         return await self._request("POST", "/api/users", json=payload)
 
     async def get_user(self, short_uuid: str) -> dict:

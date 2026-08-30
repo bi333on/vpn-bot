@@ -32,32 +32,57 @@ def build_vless(
     return f"vless://{uuid}@{address}:{port}?{query}#{quote(remark, safe='')}"
 
 
-def _pick_reality_inbound(inbounds: list[dict], preferred_tag: str = "") -> dict:
+def _pick_reality_inbound(
+    inbounds: list[dict],
+    preferred_tag: str = "",
+    preferred_node_uuid: str = "",
+) -> dict:
     if not inbounds:
         raise ValueError("no inbounds configured")
+    candidates = inbounds
+    if preferred_node_uuid:
+        filtered = [
+            i
+            for i in inbounds
+            if i.get("nodeUuid") == preferred_node_uuid
+            or i.get("node_uuid") == preferred_node_uuid
+        ]
+        if filtered:
+            candidates = filtered
     if preferred_tag:
-        for item in inbounds:
+        for item in candidates:
             if item.get("tag") == preferred_tag:
                 return item
-    for item in inbounds:
+    for item in candidates:
         kind = str(item.get("type") or item.get("protocol") or "").lower()
         if kind in ("reality", "vless") and (
             str(item.get("security") or "").lower() == "reality"
             or kind == "reality"
         ):
             return item
-    return inbounds[0]
+    return candidates[0]
 
 
 def resolve_connection(
     inbounds: list[dict],
     hosts: list[dict],
     preferred_tag: str = "",
+    preferred_node_uuid: str = "",
 ) -> dict:
     """Извлечь параметры подключения (address/port/pbk/sid/sni/flow)."""
-    inbound = _pick_reality_inbound(inbounds, preferred_tag)
+    inbound = _pick_reality_inbound(inbounds, preferred_tag, preferred_node_uuid)
 
-    host = hosts[0] if hosts else {}
+    host_list = hosts
+    if preferred_node_uuid:
+        filtered_hosts = [
+            h
+            for h in hosts
+            if h.get("nodeUuid") == preferred_node_uuid
+            or h.get("node_uuid") == preferred_node_uuid
+        ]
+        if filtered_hosts:
+            host_list = filtered_hosts
+    host = host_list[0] if host_list else {}
     address = str(
         host.get("address")
         or host.get("server")
