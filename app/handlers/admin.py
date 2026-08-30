@@ -708,7 +708,8 @@ async def cb_design_emoji_slot(cb: CallbackQuery, state: FSMContext) -> None:
     await state.update_data(design_slot=slot)
     await state.set_state(AdminFlow.design_emoji)
     await cb.message.edit_text(
-        f"Отправьте эмодзи для кнопки <b>{slot}</b> (обычный эмодзи или custom-emoji ID):",
+        f"Отправьте эмодзи для кнопки <b>{slot}</b>.\n"
+        "Используйте обычный эмодзи (например 🚀) — в кнопках кастомные эмодзи не отображаются.",
         parse_mode="HTML",
         reply_markup=cancel_keyboard(),
     )
@@ -858,7 +859,8 @@ async def cb_design_images(cb: CallbackQuery) -> None:
     kb.button(text="🔙 Назад", callback_data="admin:design")
     kb.adjust(1)
     await cb.message.edit_text(
-        "🖼 Картинки над экранами (URL или file_id фото).\n"
+        "🖼 Картинки над экранами.\n"
+        "Можно прислать фото, URL картинки или file_id.\n"
         "Экраны: cabinet (профиль), balance, buy, subs.",
         reply_markup=kb.as_markup(),
     )
@@ -871,7 +873,7 @@ async def cb_design_img_slot(cb: CallbackQuery, state: FSMContext) -> None:
     await state.update_data(design_screen=screen)
     await state.set_state(AdminFlow.design_img)
     await cb.message.edit_text(
-        f"Отправьте URL картинки или file_id для экрана <b>{screen}</b> "
+        f"Отправьте <b>фото</b>, URL картинки или file_id для экрана <b>{screen}</b> "
         "(или «удалить», чтобы убрать):",
         parse_mode="HTML",
         reply_markup=cancel_keyboard(),
@@ -882,18 +884,29 @@ async def cb_design_img_slot(cb: CallbackQuery, state: FSMContext) -> None:
 @router.message(AdminFlow.design_img)
 async def on_design_img(message: Message, state: FSMContext) -> None:
     value = (message.text or "").strip()
+    # Если прислали картинку (фото/документ) — сохраняем её file_id.
+    if message.photo:
+        value = message.photo[-1].file_id
+    elif message.document and (message.document.mime_type or "").startswith("image/"):
+        value = message.document.file_id
     data = await state.get_data()
     screen = data["design_screen"]
+    removed = not value or value.lower() in ("off", "удалить", "remove")
     async with session_scope() as session:
         design = await get_design(session)
         images = design.setdefault("images", {})
-        if value and value.lower() not in ("off", "удалить", "remove"):
-            images[screen] = value
-        else:
+        if removed:
             images.pop(screen, None)
+        else:
+            images[screen] = value
         await save_design(session, design)
     await state.clear()
-    await message.answer(f"✅ Картинка для {screen} сохранена.", reply_markup=admin_menu())
+    await message.answer(
+        f"✅ Картинка для {screen} удалена."
+        if removed
+        else f"✅ Картинка для {screen} сохранена.",
+        reply_markup=admin_menu(),
+    )
 
 
 # ---------- вход из кабинета ----------

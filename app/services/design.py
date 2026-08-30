@@ -6,7 +6,6 @@ from __future__ import annotations
 
 from app.i18n import tr
 from app.services.settings import get_setting, set_setting
-from app.utils import tg_emoji
 
 DESIGN_KEY = "design"
 
@@ -45,16 +44,20 @@ async def save_design(session, design: dict) -> None:
 
 
 def button_label(slot: str, lang: str, design: dict) -> tuple[str, str]:
-    """Вернуть (текст_кнопки, callback) для слота."""
+    """Вернуть (текст_кнопки, callback) для слота.
+
+    Inline-кнопки не поддерживают HTML-разметку, поэтому числовой custom-emoji ID
+    не рендерится — вместо него оставляем обычный эмодзи слота.
+    """
     for s in BUTTON_SLOTS:
         if s[0] == slot:
-            _, emoji, label_key, callback = s
+            _, default_emoji, label_key, callback = s
+            emoji = default_emoji
             custom = (design.get("emoji") or {}).get(slot)
             if custom:
-                if str(custom).isdigit():
-                    emoji = tg_emoji(str(custom), emoji)
-                else:
-                    emoji = str(custom)
+                custom = str(custom).strip()
+                if custom and not custom.isdigit():
+                    emoji = custom
             label = (design.get("labels") or {}).get(slot) or tr(lang, label_key)
             return f"{emoji} {label}", callback
     return slot, slot
